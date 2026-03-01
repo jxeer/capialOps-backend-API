@@ -11,7 +11,7 @@ csrf = CSRFProtect()
 
 def create_app():
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32).hex())
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "capitalops-dev-secret-key-change-in-production")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
