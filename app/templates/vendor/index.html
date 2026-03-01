@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Asset & Vendor Control - CapitalOps{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Asset & Vendor Control</h2>
+    <p>Vendor management, work orders, and operational discipline</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Total Vendors</div>
+        <div class="stat-value accent">{{ stats.total_vendors }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">COI Expired</div>
+        <div class="stat-value {% if stats.coi_expired > 0 %}danger{% else %}success{% endif %}">{{ stats.coi_expired }}</div>
+        <div class="stat-sub">{% if stats.coi_expired > 0 %}Action required{% else %}All current{% endif %}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Open Work Orders</div>
+        <div class="stat-value warning">{{ stats.open_orders }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total WO Cost</div>
+        <div class="stat-value">${{ "{:,.0f}".format(stats.total_cost) }}</div>
+        <div class="stat-sub">CapEx: ${{ "{:,.0f}".format(stats.capex_total) }} | OpEx: ${{ "{:,.0f}".format(stats.opex_total) }}</div>
+    </div>
+</div>
+
+<div style="margin-bottom:20px;display:flex;gap:12px;">
+    {% if current_user.role == 'sponsor_admin' %}
+    <a href="{{ url_for('vendor.add_vendor') }}" class="btn btn-primary">Add Vendor</a>
+    {% endif %}
+    <a href="{{ url_for('vendor.create_work_order') }}" class="btn btn-outline">Create Work Order</a>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Vendors</h3>
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Vendor</th>
+                        <th>Type</th>
+                        <th>Asset</th>
+                        <th>COI</th>
+                        <th>SLA</th>
+                        <th>Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vendors %}
+                    <tr>
+                        <td style="color:var(--text-primary);font-weight:500;">{{ v.name }}</td>
+                        <td>{{ v.type }}</td>
+                        <td>{{ v.asset.name }}</td>
+                        <td><span class="badge {% if v.coi_status == 'Current' %}badge-success{% elif v.coi_status == 'Expired' %}badge-danger{% else %}badge-warning{% endif %}">{{ v.coi_status }}</span></td>
+                        <td><span class="badge {% if v.sla_type == 'Priority' %}badge-purple{% else %}badge-neutral{% endif %}">{{ v.sla_type }}</span></td>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <div class="progress-bar" style="width:60px;">
+                                    <div class="progress-fill {% if v.performance_score >= 85 %}success{% elif v.performance_score >= 70 %}warning{% else %}danger{% endif %}" style="width:{{ v.performance_score }}%"></div>
+                                </div>
+                                <span>{{ v.performance_score }}</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Work Orders</h3>
+        </div>
+        {% if work_orders %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Vendor</th>
+                        <th>Priority</th>
+                        <th>Cost</th>
+                        <th>CapEx</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for wo in work_orders %}
+                    <tr>
+                        <td style="color:var(--text-primary);">{{ wo.type }}</td>
+                        <td>{{ wo.vendor.name }}</td>
+                        <td><span class="badge {% if wo.priority == 'Urgent' %}badge-danger{% elif wo.priority == 'High' %}badge-warning{% else %}badge-neutral{% endif %}">{{ wo.priority }}</span></td>
+                        <td>${{ "{:,.0f}".format(wo.cost|float) }}</td>
+                        <td>{% if wo.capex_flag %}<span class="badge badge-info">CapEx</span>{% else %}OpEx{% endif %}</td>
+                        <td><span class="badge {% if wo.status == 'Complete' %}badge-success{% elif wo.status == 'Open' %}badge-warning{% else %}badge-neutral{% endif %}">{{ wo.status }}</span></td>
+                        <td>
+                            {% if wo.status != 'Complete' %}
+                            <form method="POST" action="{{ url_for('vendor.update_work_order', wo_id=wo.id) }}" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="Complete">
+                                <button type="submit" class="btn btn-sm btn-success">Complete</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="card-body">
+            <div class="empty-state">
+                <h4>No work orders yet</h4>
+                <p>Create a work order to track vendor assignments.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

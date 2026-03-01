@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}{{ deal.project.asset.name }} Deal - CapitalOps{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>{{ deal.project.asset.name }} - Deal Room</h2>
+    <p>{{ deal.project.asset.location }} &middot; {{ deal.project.asset.asset_type }}</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Capital Required</div>
+        <div class="stat-value">${{ "{:,.0f}".format(deal.capital_required|float) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Capital Raised</div>
+        <div class="stat-value success">${{ "{:,.0f}".format(deal.capital_raised|float) }}</div>
+        <div class="progress-bar" style="margin-top:8px;">
+            {% set pct = (deal.capital_raised|float / deal.capital_required|float * 100)|round|int if deal.capital_required else 0 %}
+            <div class="progress-fill {% if pct >= 100 %}success{% elif pct >= 50 %}accent{% else %}warning{% endif %}" style="width:{{ [pct, 100]|min }}%"></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Return Profile</div>
+        <div class="stat-value accent" style="font-size:22px;">{{ deal.return_profile }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Duration</div>
+        <div class="stat-value info" style="font-size:22px;">{{ deal.duration }}</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Deal Details</h3>
+        </div>
+        <div class="card-body">
+            <table>
+                <tr><td style="color:var(--text-muted)">Risk Level</td><td><span class="badge {% if deal.risk_level == 'Low' %}badge-success{% elif 'High' in deal.risk_level %}badge-danger{% else %}badge-warning{% endif %}">{{ deal.risk_level }}</span></td></tr>
+                <tr><td style="color:var(--text-muted)">Complexity</td><td>{{ deal.complexity }}</td></tr>
+                <tr><td style="color:var(--text-muted)">Phase</td><td>{{ deal.phase }}</td></tr>
+                <tr><td style="color:var(--text-muted)">Status</td><td><span class="badge {% if deal.status == 'Open' %}badge-info{% else %}badge-success{% endif %}">{{ deal.status }}</span></td></tr>
+                <tr><td style="color:var(--text-muted)">Project Phase</td><td>{{ deal.project.phase }}</td></tr>
+                <tr><td style="color:var(--text-muted)">Asset Type</td><td>{{ deal.project.asset.asset_type }}</td></tr>
+                <tr><td style="color:var(--text-muted)">Square Footage</td><td>{{ "{:,.0f}".format(deal.project.asset.square_footage) }} SF</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Allocations</h3>
+        </div>
+        <div class="card-body">
+            {% if allocations %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Investor</th>
+                        <th>Soft Commit</th>
+                        <th>Hard Commit</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in allocations %}
+                    <tr>
+                        <td style="color:var(--text-primary);">{{ a.investor.name }}</td>
+                        <td>${{ "{:,.0f}".format(a.soft_commit_amount|float) }}</td>
+                        <td>${{ "{:,.0f}".format(a.hard_commit_amount|float) }}</td>
+                        <td><span class="badge badge-info">{{ a.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <h4>No allocations yet</h4>
+                <p>Create an allocation to track investor commitments.</p>
+            </div>
+            {% endif %}
+
+            {% if current_user.role == 'sponsor_admin' and deal.status == 'Open' %}
+            <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border);">
+                <h4 style="font-size:14px;margin-bottom:12px;">Create Allocation</h4>
+                <form method="POST" action="{{ url_for('capital.create_allocation') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="deal_id" value="{{ deal.id }}">
+                    <div class="form-group">
+                        <label>Investor</label>
+                        <select name="investor_id" class="form-control" required>
+                            <option value="">Select investor...</option>
+                            {% for inv in investors %}
+                            <option value="{{ inv.id }}">{{ inv.name }} ({{ inv.tier_level }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Soft Commit ($)</label>
+                            <input type="number" name="soft_commit_amount" class="form-control" step="1000">
+                        </div>
+                        <div class="form-group">
+                            <label>Hard Commit ($)</label>
+                            <input type="number" name="hard_commit_amount" class="form-control" step="1000">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <input type="text" name="notes" class="form-control">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create Allocation</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

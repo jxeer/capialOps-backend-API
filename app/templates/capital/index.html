@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Capital Engine - CapitalOps{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Capital Engine</h2>
+    <p>Investor alignment, deal distribution, and allocation tracking</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Total Capital Required</div>
+        <div class="stat-value">${{ "{:,.0f}".format(total_required) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Capital Raised</div>
+        <div class="stat-value success">${{ "{:,.0f}".format(total_raised) }}</div>
+        <div class="stat-sub">{{ (total_raised / total_required * 100)|round|int if total_required else 0 }}% of target</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Capital Gap</div>
+        <div class="stat-value warning">${{ "{:,.0f}".format(total_required - total_raised) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Active Investors</div>
+        <div class="stat-value purple">{{ investors|selectattr('status', 'eq', 'Active')|list|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Open Deals</div>
+        <div class="stat-value accent">{{ deals|selectattr('status', 'eq', 'Open')|list|length }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Allocations</div>
+        <div class="stat-value info">{{ allocations|length }}</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Active Deals</h3>
+            <a href="{{ url_for('capital.deals') }}" class="btn btn-outline btn-sm">View All</a>
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Deal</th>
+                        <th>Phase</th>
+                        <th>Raised</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in deals %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('capital.deal_detail', deal_id=d.id) }}" style="color:var(--text-primary);font-weight:500;">
+                                {{ d.project.asset.name }}
+                            </a>
+                        </td>
+                        <td>{{ d.phase }}</td>
+                        <td>
+                            {% set pct = (d.capital_raised|float / d.capital_required|float * 100)|round|int if d.capital_required else 0 %}
+                            {{ pct }}%
+                        </td>
+                        <td><span class="badge {% if d.status == 'Open' %}badge-info{% else %}badge-success{% endif %}">{{ d.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Investor Pipeline</h3>
+            <a href="{{ url_for('capital.investors') }}" class="btn btn-outline btn-sm">View All</a>
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Investor</th>
+                        <th>Tier</th>
+                        <th>Check Range</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inv in investors[:5] %}
+                    <tr>
+                        <td style="color:var(--text-primary);font-weight:500;">{{ inv.name }}</td>
+                        <td><span class="badge {% if inv.tier_level == 'Tier 2' %}badge-purple{% else %}badge-info{% endif %}">{{ inv.tier_level }}</span></td>
+                        <td>${{ "{:,.0f}".format(inv.check_size_min|float) }} - ${{ "{:,.0f}".format(inv.check_size_max|float) }}</td>
+                        <td><span class="badge {% if inv.status == 'Active' %}badge-success{% else %}badge-warning{% endif %}">{{ inv.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

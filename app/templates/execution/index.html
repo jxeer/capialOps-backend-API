@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Execution Control - CapitalOps{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Execution Control</h2>
+    <p>Milestone progress, budget variance, and risk monitoring</p>
+</div>
+
+<div class="stats-grid">
+    {% for pd in project_data %}
+    <div class="stat-card" style="cursor:pointer;" onclick="location.href='{{ url_for('execution.project_detail', project_id=pd.project.id) }}'">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div>
+                <div style="font-size:15px;font-weight:600;color:var(--text-primary);">{{ pd.asset.name }}</div>
+                <div style="font-size:12px;color:var(--text-muted);">{{ pd.asset.location }}</div>
+            </div>
+            <span class="badge {% if pd.project.status == 'On Track' %}badge-success{% elif pd.project.status == 'At Risk' %}badge-danger{% else %}badge-warning{% endif %}">{{ pd.project.status }}</span>
+        </div>
+        <div style="margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                <span>Milestones</span>
+                <span>{{ pd.completed }}/{{ pd.total }} ({{ pd.progress }}%)</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill {% if pd.progress >= 70 %}success{% elif pd.progress >= 40 %}warning{% else %}accent{% endif %}" style="width:{{ pd.progress }}%"></div>
+            </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;">
+            <span style="color:var(--text-muted);">Budget: {{ pd.budget_pct }}% used</span>
+            {% if pd.risk_count > 0 %}
+            <span style="color:var(--danger);">{{ pd.risk_count }} risk flag{{ 's' if pd.risk_count > 1 }}</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>All Projects</h3>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Asset</th>
+                    <th>Phase</th>
+                    <th>PM Assigned</th>
+                    <th>Budget Total</th>
+                    <th>Budget Actual</th>
+                    <th>Variance</th>
+                    <th>Milestones</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pd in project_data %}
+                <tr>
+                    <td style="color:var(--text-primary);font-weight:500;">{{ pd.asset.name }}</td>
+                    <td>{{ pd.project.phase }}</td>
+                    <td>{{ pd.project.pm_assigned }}</td>
+                    <td>${{ "{:,.0f}".format(pd.project.budget_total|float) }}</td>
+                    <td>${{ "{:,.0f}".format(pd.project.budget_actual|float) }}</td>
+                    <td style="color:{% if pd.budget_variance >= 0 %}var(--success){% else %}var(--danger){% endif %}">
+                        ${{ "{:,.0f}".format(pd.budget_variance) }}
+                    </td>
+                    <td>{{ pd.completed }}/{{ pd.total }}</td>
+                    <td><span class="badge {% if pd.project.status == 'On Track' %}badge-success{% elif pd.project.status == 'At Risk' %}badge-danger{% else %}badge-warning{% endif %}">{{ pd.project.status }}</span></td>
+                    <td><a href="{{ url_for('execution.project_detail', project_id=pd.project.id) }}" class="btn btn-outline btn-sm">View</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

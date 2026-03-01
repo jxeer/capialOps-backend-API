@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Governance Log - CapitalOps{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Governance Event Log</h2>
+    <p>Structured execution reporting across all projects</p>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Project Status Summary</h3>
+        </div>
+        <div class="card-body">
+            {% for p in projects %}
+            <div style="padding:12px 0;border-bottom:1px solid var(--border);">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-weight:500;color:var(--text-primary);">{{ p.asset.name }}</div>
+                        <div style="font-size:12px;color:var(--text-muted);">{{ p.phase }} &middot; {{ p.pm_assigned }}</div>
+                    </div>
+                    <span class="badge {% if p.status == 'On Track' %}badge-success{% elif p.status == 'At Risk' %}badge-danger{% else %}badge-warning{% endif %}">{{ p.status }}</span>
+                </div>
+                <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-secondary);">
+                    <span>Budget: ${{ "{:,.0f}".format(p.budget_actual|float) }} / ${{ "{:,.0f}".format(p.budget_total|float) }}</span>
+                    <span>Target: {{ p.target_completion.strftime('%b %Y') if p.target_completion else 'TBD' }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Risk & Delay Log</h3>
+        </div>
+        <div class="card-body">
+            {% set flagged = milestones|selectattr('risk_flag')|list %}
+            {% set delayed = milestones|selectattr('delay_explanation')|list %}
+            {% if flagged or delayed %}
+            {% for m in flagged %}
+            <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+                <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--text-primary);font-weight:500;">{{ m.name }}</span>
+                    <span class="badge badge-danger">Risk Flag</span>
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);">{{ m.project.asset.name }} &middot; {{ m.category }}</div>
+                {% if m.delay_explanation %}
+                <div style="font-size:13px;color:var(--warning);margin-top:4px;">{{ m.delay_explanation }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% for m in delayed if not m.risk_flag %}
+            <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+                <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--text-primary);font-weight:500;">{{ m.name }}</span>
+                    <span class="badge badge-warning">Delayed</span>
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);">{{ m.project.asset.name }}</div>
+                <div style="font-size:13px;color:var(--warning);margin-top:4px;">{{ m.delay_explanation }}</div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <h4>No risk flags or delays</h4>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Milestone Timeline</h3>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Project</th>
+                    <th>Milestone</th>
+                    <th>Category</th>
+                    <th>Target</th>
+                    <th>Completed</th>
+                    <th>Status</th>
+                    <th>Risk</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in milestones %}
+                <tr>
+                    <td style="color:var(--text-primary);">{{ m.project.asset.name }}</td>
+                    <td style="font-weight:500;">{{ m.name }}</td>
+                    <td>{{ m.category }}</td>
+                    <td>{{ m.target_date.strftime('%b %d, %Y') if m.target_date else '-' }}</td>
+                    <td>{{ m.completion_date.strftime('%b %d, %Y') if m.completion_date else '-' }}</td>
+                    <td><span class="badge {% if m.status == 'Complete' %}badge-success{% elif m.status == 'In Progress' %}badge-info{% else %}badge-neutral{% endif %}">{{ m.status }}</span></td>
+                    <td>{% if m.risk_flag %}<span class="badge badge-danger">RISK</span>{% else %}-{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

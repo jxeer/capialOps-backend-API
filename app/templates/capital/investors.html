@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Investors - CapitalOps{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Investor Pipeline</h2>
+    <p>Manage investor profiles, accreditation, and preferences</p>
+</div>
+
+<div style="margin-bottom:20px;">
+    {% if current_user.role == 'sponsor_admin' %}
+    <a href="{{ url_for('capital.add_investor') }}" class="btn btn-primary">Add Investor</a>
+    {% endif %}
+    <a href="{{ url_for('capital.matching') }}" class="btn btn-outline">Run Deal Matching</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>All Investors</h3>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Accreditation</th>
+                    <th>Check Size</th>
+                    <th>Asset Pref</th>
+                    <th>Risk Tolerance</th>
+                    <th>Strategy</th>
+                    <th>Tier</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for inv in investors %}
+                <tr>
+                    <td style="color:var(--text-primary);font-weight:500;">{{ inv.name }}</td>
+                    <td><span class="badge {% if inv.accreditation_status == 'Verified' %}badge-success{% else %}badge-warning{% endif %}">{{ inv.accreditation_status }}</span></td>
+                    <td>${{ "{:,.0f}".format(inv.check_size_min|float) }} - ${{ "{:,.0f}".format(inv.check_size_max|float) }}</td>
+                    <td>{{ inv.asset_preference }}</td>
+                    <td>{{ inv.risk_tolerance }}</td>
+                    <td>{{ inv.strategic_interest }}</td>
+                    <td><span class="badge {% if inv.tier_level == 'Tier 2' %}badge-purple{% else %}badge-info{% endif %}">{{ inv.tier_level }}</span></td>
+                    <td><span class="badge {% if inv.status == 'Active' %}badge-success{% else %}badge-warning{% endif %}">{{ inv.status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

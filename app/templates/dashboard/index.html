@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - CapitalOps{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Portfolio Dashboard</h2>
+    <p>Operational overview across all active projects</p>
+</div>
+
+<div class="flow-indicator">
+    <div class="flow-step">Module 3: Vendor & Maintenance</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">Module 2: Execution Control</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step active">Module 1: Capital Engine</div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Active Projects</div>
+        <div class="stat-value accent">{{ stats.active_projects }}</div>
+        <div class="stat-sub">Across portfolio</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Budget</div>
+        <div class="stat-value">${{ "{:,.0f}".format(stats.total_budget) }}</div>
+        <div class="stat-sub">${{ "{:,.0f}".format(stats.total_actual) }} spent ({{ (stats.total_actual / stats.total_budget * 100)|round|int if stats.total_budget else 0 }}%)</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Capital Raised</div>
+        <div class="stat-value success">${{ "{:,.0f}".format(stats.capital_raised) }}</div>
+        <div class="stat-sub">{{ stats.capital_pct }}% of ${{ "{:,.0f}".format(stats.capital_required) }} required</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Active Investors</div>
+        <div class="stat-value purple">{{ stats.active_investors }}</div>
+        <div class="stat-sub">Verified and aligned</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Milestone Progress</div>
+        <div class="stat-value info">{{ stats.milestone_progress }}%</div>
+        <div class="progress-bar" style="margin-top:8px;">
+            <div class="progress-fill {% if stats.milestone_progress >= 70 %}success{% elif stats.milestone_progress >= 40 %}warning{% else %}danger{% endif %}" style="width:{{ stats.milestone_progress }}%"></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Risk Flags</div>
+        <div class="stat-value {% if stats.risk_flags > 0 %}danger{% else %}success{% endif %}">{{ stats.risk_flags }}</div>
+        <div class="stat-sub">{% if stats.risk_flags > 0 %}Requires attention{% else %}All clear{% endif %}</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Project Status</h3>
+            {% if current_user.role in ['sponsor_admin', 'project_manager', 'general_contractor'] %}
+            <a href="{{ url_for('execution.index') }}" class="btn btn-outline btn-sm">View All</a>
+            {% endif %}
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Phase</th>
+                        <th>Status</th>
+                        <th>Budget Used</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in projects %}
+                    <tr>
+                        <td style="color:var(--text-primary);font-weight:500;">{{ p.asset.name }}</td>
+                        <td>{{ p.phase }}</td>
+                        <td>
+                            <span class="badge {% if p.status == 'On Track' %}badge-success{% elif p.status == 'At Risk' %}badge-danger{% else %}badge-warning{% endif %}">
+                                {{ p.status }}
+                            </span>
+                        </td>
+                        <td>
+                            {% set pct = (p.budget_actual|float / p.budget_total|float * 100)|round|int if p.budget_total else 0 %}
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <div class="progress-bar" style="width:80px;">
+                                    <div class="progress-fill {% if pct < 70 %}success{% elif pct < 90 %}warning{% else %}danger{% endif %}" style="width:{{ pct }}%"></div>
+                                </div>
+                                <span>{{ pct }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Risk Flags</h3>
+        </div>
+        <div class="card-body">
+            {% if risk_milestones %}
+            {% for m in risk_milestones %}
+            <div style="padding:12px 0;border-bottom:1px solid var(--border);">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-weight:500;color:var(--text-primary);">{{ m.name }}</div>
+                        <div style="font-size:12px;color:var(--text-muted);">{{ m.project.asset.name }} &middot; {{ m.category }}</div>
+                    </div>
+                    <span class="badge badge-danger">Risk</span>
+                </div>
+                {% if m.delay_explanation %}
+                <div style="font-size:13px;color:var(--warning);margin-top:6px;">{{ m.delay_explanation }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <h4>No active risk flags</h4>
+                <p>All milestones are tracking within tolerance.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Deal Pipeline</h3>
+        {% if current_user.role == 'sponsor_admin' %}
+        <a href="{{ url_for('capital.deals') }}" class="btn btn-outline btn-sm">Manage Deals</a>
+        {% endif %}
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Deal</th>
+                    <th>Capital Required</th>
+                    <th>Capital Raised</th>
+                    <th>Progress</th>
+                    <th>Risk</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in deals %}
+                <tr>
+                    <td style="color:var(--text-primary);font-weight:500;">{{ d.project.asset.name }}</td>
+                    <td>${{ "{:,.0f}".format(d.capital_required|float) }}</td>
+                    <td>${{ "{:,.0f}".format(d.capital_raised|float) }}</td>
+                    <td>
+                        {% set dpct = (d.capital_raised|float / d.capital_required|float * 100)|round|int if d.capital_required else 0 %}
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div class="progress-bar" style="width:80px;">
+                                <div class="progress-fill {% if dpct >= 100 %}success{% elif dpct >= 50 %}accent{% else %}warning{% endif %}" style="width:{{ [dpct, 100]|min }}%"></div>
+                            </div>
+                            <span>{{ dpct }}%</span>
+                        </div>
+                    </td>
+                    <td><span class="badge {% if d.risk_level == 'Low' %}badge-success{% elif 'High' in d.risk_level %}badge-danger{% else %}badge-warning{% endif %}">{{ d.risk_level }}</span></td>
+                    <td><span class="badge {% if d.status == 'Open' %}badge-info{% elif d.status == 'Closed' %}badge-success{% else %}badge-neutral{% endif %}">{{ d.status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

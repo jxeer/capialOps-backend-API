@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CapitalOps - Sign In</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <h1>CAPITALOPS</h1>
+            <div class="subtitle">Capital + Governance Operating Layer</div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" class="form-control" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Sign In</button>
+            </form>
+
+            <div class="demo-accounts">
+                <h4>Demo Accounts</h4>
+                <div class="demo-account">
+                    <span>Sponsor Admin</span>
+                    <span>admin / admin123</span>
+                </div>
+                <div class="demo-account">
+                    <span>Project Manager</span>
+                    <span>pm / pm123</span>
+                </div>
+                <div class="demo-account">
+                    <span>General Contractor</span>
+                    <span>gc / gc123</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

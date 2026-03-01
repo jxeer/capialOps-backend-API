@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Add Vendor - CapitalOps{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Add Vendor</h2>
+    <p>Register a new vendor for an asset</p>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('vendor.add_vendor') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Vendor Name</label>
+                    <input type="text" name="name" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select name="type" class="form-control">
+                        <option value="General Contractor">General Contractor</option>
+                        <option value="Electrical">Electrical</option>
+                        <option value="Mechanical">Mechanical</option>
+                        <option value="Plumbing">Plumbing</option>
+                        <option value="Fire Protection">Fire Protection</option>
+                        <option value="Roofing">Roofing</option>
+                        <option value="Landscaping">Landscaping</option>
+                        <option value="Cleaning">Cleaning</option>
+                        <option value="Security">Security</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Asset</label>
+                    <select name="asset_id" class="form-control" required>
+                        {% for a in assets %}
+                        <option value="{{ a.id }}">{{ a.name }} ({{ a.location }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>COI Status</label>
+                    <select name="coi_status" class="form-control">
+                        <option value="Pending">Pending</option>
+                        <option value="Current">Current</option>
+                        <option value="Expired">Expired</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>SLA Type</label>
+                    <select name="sla_type" class="form-control">
+                        <option value="Standard">Standard</option>
+                        <option value="Priority">Priority</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Performance Score (0-100)</label>
+                    <input type="number" name="performance_score" class="form-control" min="0" max="100" value="80">
+                </div>
+            </div>
+            <div style="display:flex;gap:12px;">
+                <button type="submit" class="btn btn-primary">Add Vendor</button>
+                <a href="{{ url_for('vendor.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
