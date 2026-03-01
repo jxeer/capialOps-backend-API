@@ -1,20 +1,66 @@
+/*
+ * CapitalOps - Global Stylesheet
+ *
+ * Dark-themed UI for the CapitalOps operating layer.
+ * Uses CSS custom properties (variables) for consistent theming.
+ *
+ * Layout: Fixed sidebar (260px) + scrollable main content area.
+ * Responsive: Sidebar collapses on mobile (<768px), grids stack on tablet (<1024px).
+ *
+ * Sections:
+ *   1. Theme Variables
+ *   2. Global Reset & Base Styles
+ *   3. Layout (Sidebar + Main Content)
+ *   4. Sidebar Navigation
+ *   5. Page Headers
+ *   6. Stats Grid & Cards
+ *   7. Data Tables
+ *   8. Badges & Status Indicators
+ *   9. Progress Bars
+ *  10. Buttons
+ *  11. Forms & Inputs
+ *  12. Alerts / Flash Messages
+ *  13. Grid Layouts
+ *  14. Deal Matching Cards
+ *  15. Empty States
+ *  16. Login Page
+ *  17. Data Flow Indicator
+ *  18. Responsive Breakpoints
+ */
+
+
+/* ==========================================================================
+   1. Theme Variables
+   All colors are defined here for easy theme customization.
+   ========================================================================== */
+
 :root {
-    --bg-primary: #0a0e17;
-    --bg-secondary: #111827;
-    --bg-card: #1a2236;
-    --bg-card-hover: #1f2a40;
-    --border: #2a3650;
-    --text-primary: #e5e7eb;
-    --text-secondary: #9ca3af;
-    --text-muted: #6b7280;
-    --accent: #3b82f6;
-    --accent-hover: #2563eb;
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --info: #06b6d4;
-    --purple: #8b5cf6;
+    /* Background colors — darkest to lightest */
+    --bg-primary: #0a0e17;       /* Page background */
+    --bg-secondary: #111827;     /* Sidebar background */
+    --bg-card: #1a2236;          /* Card/panel background */
+    --bg-card-hover: #1f2a40;    /* Card hover/active state */
+    --border: #2a3650;           /* Borders and dividers */
+
+    /* Text colors — brightest to dimmest */
+    --text-primary: #e5e7eb;     /* Primary text (headings, names) */
+    --text-secondary: #9ca3af;   /* Secondary text (descriptions, table cells) */
+    --text-muted: #6b7280;       /* Muted text (labels, captions) */
+
+    /* Accent and semantic colors */
+    --accent: #3b82f6;           /* Primary action color (blue) */
+    --accent-hover: #2563eb;     /* Accent hover state */
+    --success: #10b981;          /* Positive states (on track, complete, funded) */
+    --warning: #f59e0b;          /* Warning states (at risk, delays, pending) */
+    --danger: #ef4444;           /* Danger states (risk flags, expired, errors) */
+    --info: #06b6d4;             /* Informational states (in progress, open) */
+    --purple: #8b5cf6;           /* Priority/tier indicators */
 }
+
+
+/* ==========================================================================
+   2. Global Reset & Base Styles
+   ========================================================================== */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -28,10 +74,30 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
 
+
+/* ==========================================================================
+   3. Layout — Sidebar + Main Content
+   Fixed sidebar on the left, scrollable content area on the right.
+   ========================================================================== */
+
 .layout {
     display: flex;
     min-height: 100vh;
 }
+
+.main-content {
+    margin-left: 260px;  /* Matches sidebar width */
+    flex: 1;
+    padding: 32px;
+    min-height: 100vh;
+}
+
+
+/* ==========================================================================
+   4. Sidebar Navigation
+   Fixed-position sidebar with brand header, module sections, and user info.
+   Navigation links highlight the active page with a blue right border.
+   ========================================================================== */
 
 .sidebar {
     width: 260px;
@@ -46,6 +112,7 @@ a:hover { color: var(--accent-hover); }
     z-index: 100;
 }
 
+/* Brand/logo area at the top of the sidebar */
 .sidebar-brand {
     padding: 24px 20px;
     border-bottom: 1px solid var(--border);
@@ -65,6 +132,7 @@ a:hover { color: var(--accent-hover); }
     letter-spacing: 1px;
 }
 
+/* Module sections (Overview, Capital Engine, Execution Control, Vendor) */
 .sidebar-section {
     padding: 16px 0;
     border-bottom: 1px solid var(--border);
@@ -79,6 +147,7 @@ a:hover { color: var(--accent-hover); }
     margin-bottom: 8px;
 }
 
+/* Individual navigation links within sections */
 .sidebar-link {
     display: flex;
     align-items: center;
@@ -94,6 +163,7 @@ a:hover { color: var(--accent-hover); }
     background: var(--bg-card);
 }
 
+/* Active page indicator — blue text with blue right border */
 .sidebar-link.active {
     color: var(--accent);
     background: rgba(59, 130, 246, 0.1);
@@ -106,6 +176,7 @@ a:hover { color: var(--accent-hover); }
     flex-shrink: 0;
 }
 
+/* User info panel pinned to the bottom of the sidebar */
 .sidebar-user {
     padding: 16px 20px;
     border-top: 1px solid var(--border);
@@ -123,6 +194,7 @@ a:hover { color: var(--accent-hover); }
     margin-bottom: 8px;
 }
 
+/* Circular avatar with the user's first initial */
 .user-avatar {
     width: 36px;
     height: 36px;
@@ -139,12 +211,11 @@ a:hover { color: var(--accent-hover); }
 .user-name { font-size: 13px; font-weight: 500; }
 .user-role { font-size: 11px; color: var(--text-muted); }
 
-.main-content {
-    margin-left: 260px;
-    flex: 1;
-    padding: 32px;
-    min-height: 100vh;
-}
+
+/* ==========================================================================
+   5. Page Headers
+   Used at the top of every page with a title and description.
+   ========================================================================== */
 
 .page-header {
     margin-bottom: 32px;
@@ -161,6 +232,13 @@ a:hover { color: var(--accent-hover); }
     font-size: 14px;
 }
 
+
+/* ==========================================================================
+   6. Stats Grid & Cards
+   Responsive grid of metric cards used on dashboard and module pages.
+   Auto-fits cards into rows with a minimum width of 220px per card.
+   ========================================================================== */
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -168,6 +246,7 @@ a:hover { color: var(--accent-hover); }
     margin-bottom: 32px;
 }
 
+/* Individual stat card with hover highlight */
 .stat-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -180,6 +259,7 @@ a:hover { color: var(--accent-hover); }
     border-color: var(--accent);
 }
 
+/* Stat card label (uppercase, muted) */
 .stat-label {
     font-size: 12px;
     text-transform: uppercase;
@@ -188,6 +268,7 @@ a:hover { color: var(--accent-hover); }
     margin-bottom: 8px;
 }
 
+/* Large stat value with semantic color variants */
 .stat-value {
     font-size: 28px;
     font-weight: 700;
@@ -200,12 +281,14 @@ a:hover { color: var(--accent-hover); }
 .stat-value.accent { color: var(--accent); }
 .stat-value.purple { color: var(--purple); }
 
+/* Smaller text below the main stat value */
 .stat-sub {
     font-size: 12px;
     color: var(--text-secondary);
     margin-top: 4px;
 }
 
+/* Generic card container (used for tables, forms, content panels) */
 .card {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -228,6 +311,13 @@ a:hover { color: var(--accent-hover); }
 }
 
 .card-body { padding: 20px; }
+
+
+/* ==========================================================================
+   7. Data Tables
+   Full-width tables with uppercase header labels and hover row highlighting.
+   Wrapped in .table-wrapper for horizontal scroll on narrow viewports.
+   ========================================================================== */
 
 .table-wrapper { overflow-x: auto; }
 
@@ -258,6 +348,13 @@ tr:last-child td { border-bottom: none; }
 
 tr:hover td { background: var(--bg-card-hover); }
 
+
+/* ==========================================================================
+   8. Badges & Status Indicators
+   Small inline labels for status values (On Track, At Risk, Open, etc.).
+   Each variant uses a semi-transparent background with matching text color.
+   ========================================================================== */
+
 .badge {
     display: inline-block;
     padding: 4px 10px;
@@ -272,6 +369,13 @@ tr:hover td { background: var(--bg-card-hover); }
 .badge-info { background: rgba(6, 182, 212, 0.15); color: var(--info); }
 .badge-purple { background: rgba(139, 92, 246, 0.15); color: var(--purple); }
 .badge-neutral { background: rgba(107, 114, 128, 0.15); color: var(--text-secondary); }
+
+
+/* ==========================================================================
+   9. Progress Bars
+   Horizontal bar with a filled portion. Color variants indicate health:
+   success (green), warning (amber), danger (red), accent (blue).
+   ========================================================================== */
 
 .progress-bar {
     background: var(--border);
@@ -292,6 +396,12 @@ tr:hover td { background: var(--bg-card-hover); }
 .progress-fill.danger { background: var(--danger); }
 .progress-fill.accent { background: var(--accent); }
 
+
+/* ==========================================================================
+   10. Buttons
+   Action buttons with semantic color variants and size options.
+   ========================================================================== */
+
 .btn {
     display: inline-flex;
     align-items: center;
@@ -311,6 +421,8 @@ tr:hover td { background: var(--bg-card-hover); }
 .btn-success { background: var(--success); }
 .btn-warning { background: var(--warning); color: #000; }
 .btn-danger { background: var(--danger); }
+
+/* Outline variant — transparent background with border */
 .btn-outline {
     background: transparent;
     border: 1px solid var(--border);
@@ -318,7 +430,15 @@ tr:hover td { background: var(--bg-card-hover); }
 }
 .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
 
+/* Small button variant for inline table actions */
 .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+
+/* ==========================================================================
+   11. Forms & Inputs
+   Form controls styled for the dark theme. Select dropdowns use a custom
+   SVG chevron icon via background-image.
+   ========================================================================== */
 
 .form-group {
     margin-bottom: 16px;
@@ -348,6 +468,7 @@ tr:hover td { background: var(--bg-card-hover); }
     border-color: var(--accent);
 }
 
+/* Custom-styled select dropdown with SVG chevron */
 select.form-control {
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239ca3af' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
@@ -356,11 +477,18 @@ select.form-control {
     padding-right: 32px;
 }
 
+/* Two-column form layout for side-by-side fields */
 .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
 }
+
+
+/* ==========================================================================
+   12. Alerts / Flash Messages
+   Styled alert boxes for success, error, and warning flash messages.
+   ========================================================================== */
 
 .alert {
     padding: 12px 16px;
@@ -373,8 +501,21 @@ select.form-control {
 .alert-error { background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); }
 .alert-warning { background: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
 
+
+/* ==========================================================================
+   13. Grid Layouts
+   Simple responsive grids for side-by-side content panels.
+   ========================================================================== */
+
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+
+
+/* ==========================================================================
+   14. Deal Matching Cards
+   Cards for the deal-investor matching results page.
+   Shows match score, investor details, deal info, and match reason tags.
+   ========================================================================== */
 
 .match-card {
     background: var(--bg-card);
@@ -384,12 +525,14 @@ select.form-control {
     margin-bottom: 12px;
 }
 
+/* Large percentage score display */
 .match-score {
     font-size: 32px;
     font-weight: 700;
     color: var(--accent);
 }
 
+/* Horizontal tag list showing match criteria reasons */
 .match-reasons {
     display: flex;
     flex-wrap: wrap;
@@ -397,6 +540,7 @@ select.form-control {
     margin-top: 8px;
 }
 
+/* Individual match reason tag */
 .tag {
     display: inline-block;
     padding: 3px 8px;
@@ -407,6 +551,12 @@ select.form-control {
     color: var(--accent);
 }
 
+
+/* ==========================================================================
+   15. Empty States
+   Centered placeholder text shown when a list/table has no data.
+   ========================================================================== */
+
 .empty-state {
     text-align: center;
     padding: 48px 20px;
@@ -414,6 +564,13 @@ select.form-control {
 }
 
 .empty-state h4 { font-size: 16px; margin-bottom: 8px; }
+
+
+/* ==========================================================================
+   16. Login Page
+   Centered card layout for the authentication screen.
+   Used only on /login (does not use the sidebar layout).
+   ========================================================================== */
 
 .login-page {
     display: flex;
@@ -445,8 +602,10 @@ select.form-control {
     margin-bottom: 32px;
 }
 
+/* Full-width sign-in button */
 .login-card .btn { width: 100%; justify-content: center; padding: 12px; }
 
+/* Demo account credentials section below the login form */
 .demo-accounts {
     margin-top: 24px;
     padding-top: 20px;
@@ -469,6 +628,13 @@ select.form-control {
     color: var(--text-secondary);
 }
 
+
+/* ==========================================================================
+   17. Data Flow Indicator
+   Visual representation of the Module 3 → Module 2 → Module 1 data flow.
+   Displayed on the portfolio dashboard to communicate system architecture.
+   ========================================================================== */
+
 .flow-indicator {
     display: flex;
     align-items: center;
@@ -488,6 +654,7 @@ select.form-control {
     font-weight: 500;
 }
 
+/* Highlighted active step in the flow */
 .flow-step.active {
     border-color: var(--accent);
     color: var(--accent);
@@ -497,6 +664,13 @@ select.form-control {
     color: var(--text-muted);
     font-size: 18px;
 }
+
+
+/* ==========================================================================
+   18. Responsive Breakpoints
+   - Tablet (<1024px): Stats grid → 2 columns, side-by-side grids stack
+   - Mobile (<768px): Sidebar hidden, full-width content, single column stats
+   ========================================================================== */
 
 @media (max-width: 1024px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
