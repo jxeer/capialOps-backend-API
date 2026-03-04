@@ -165,10 +165,37 @@ def create_app():
         # Create all tables defined by SQLAlchemy models (safe to call repeatedly)
         db.create_all()
 
-        # Only seed demo data in Replit development environments.
-        # Production deployments should not auto-seed demo accounts.
-        if os.environ.get("REPL_SLUG") or os.environ.get("REPLIT_DEV_DOMAIN"):
+        # Auto-seed demo data in development environments only.
+        # Never seeds when FLASK_ENV=production — this is the hard safety guard.
+        # In non-production, seeds when FLASK_ENV=development or inside a Replit
+        # dev workspace (REPL_SLUG / REPLIT_DEV_DOMAIN set automatically).
+        flask_env = os.environ.get("FLASK_ENV", "").lower()
+        is_production = flask_env == "production"
+        is_dev = (
+            not is_production
+            and (
+                flask_env == "development"
+                or os.environ.get("REPL_SLUG")
+                or os.environ.get("REPLIT_DEV_DOMAIN")
+            )
+        )
+        if is_dev:
             seed_demo_data()
+
+    # --- CLI Commands ---
+    # Register custom Flask CLI commands for database management
+
+    @app.cli.command("seed")
+    def seed_command():
+        """Seed the database with demo users, projects, deals, milestones, and vendors.
+
+        Usage:
+            flask seed
+
+        Safe to run multiple times — skips seeding if users already exist.
+        """
+        seed_demo_data()
+        print("Database seeded with demo data.")
 
     return app
 

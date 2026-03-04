@@ -99,6 +99,13 @@ Operational truth → Governance interpretation → Investor transparency
 - `JWT_SECRET_KEY` — JWT signing key (falls back to SECRET_KEY, then dev default)
 - `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` — Token expiration in minutes (default: 60)
 - `FRONTEND_ORIGIN` — Comma-separated allowed origins for CORS (default: `http://localhost:5173,http://localhost:3000`)
+- `FLASK_ENV` — Set to `development` to enable auto-seeding on startup (also triggers on Replit dev env vars)
+
+## Dev Seed
+- Auto-seeds on startup when `FLASK_ENV=development` or inside a Replit dev workspace
+- Manual seed via Flask CLI: `FLASK_APP=main.py flask seed`
+- Idempotent: skips if users already exist in the database
+- Seeds: 3 users, 1 portfolio, 3 assets, 3 projects, 3 deals, 5 investors, 8 milestones, 5 vendors
 
 ## Commenting Convention
 All Python source files maintain comprehensive docstrings and inline comments.
