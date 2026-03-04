@@ -5,18 +5,18 @@ Returns aggregated portfolio-level metrics across all three modules.
 Used by the React frontend's main dashboard view.
 
 Routes:
-    GET /api/dashboard/ — Portfolio overview with aggregated stats
+    GET /api/v1/dashboard/ — Portfolio overview with aggregated stats
 """
 
-from flask import Blueprint, jsonify, g
-from app.models import Project, Deal, Investor, Milestone, Vendor, Asset, WorkOrder, RiskFlag
-from app.auth_utils import jwt_required
+from flask import Blueprint, jsonify
+from flask_jwt_extended import jwt_required
+from app.models import Project, Deal, Investor, Milestone, Vendor
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
 @dashboard_bp.route("/", methods=["GET"])
-@jwt_required
+@jwt_required()
 def index():
     """
     Return aggregated portfolio stats from all three modules.

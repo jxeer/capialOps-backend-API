@@ -6,31 +6,36 @@ No server-rendered templates — designed to be consumed by the
 capitalops-web React frontend via Authorization: Bearer <JWT>.
 
 This module defines the Flask application factory (create_app), which:
-  1. Configures the app (secret key, database URI, SQLAlchemy options, JWT settings)
-  2. Initializes extensions (SQLAlchemy, Flask-CORS)
-  3. Registers all API route blueprints
+  1. Configures the app (JWT secret, database URI, SQLAlchemy options)
+  2. Initializes extensions (SQLAlchemy, JWTManager, Flask-CORS)
+  3. Registers all API route blueprints under /api/v1/
   4. Creates database tables and seeds demo data in development
 
 Blueprint architecture:
-  - auth_bp:      /api/auth      — JWT authentication (login, register, me)
-  - capital_bp:   /api/capital    — Module 1: Capital Engine
-  - execution_bp: /api/execution  — Module 2: Execution Control
-  - vendor_bp:    /api/vendor     — Module 3: Asset & Vendor Control
-  - dashboard_bp: /api/dashboard  — Portfolio overview aggregations
+  - auth_bp:      /api/v1/auth      — JWT authentication (login, me)
+  - dashboard_bp: /api/v1/dashboard  — Portfolio overview aggregations
+  - capital_bp:   /api/v1/capital    — Module 1: Capital Engine
+  - execution_bp: /api/v1/execution  — Module 2: Execution Control
+  - vendor_bp:    /api/v1/vendor     — Module 3: Asset & Vendor Control
 
 Extensions are declared at module level so they can be imported
 by other modules (e.g., `from app import db`).
 """
 
 import os
-from flask import Flask
+from datetime import timedelta
+from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 
 # --- Extension Instances (module-level for shared access) ---
 
 # SQLAlchemy ORM instance — manages all database models and sessions
 db = SQLAlchemy()
+
+# JWTManager instance — handles JWT creation, validation, and error responses
+jwt = JWTManager()
 
 
 def create_app():
@@ -47,12 +52,21 @@ def create_app():
 
     # --- App Configuration ---
 
-    # Secret key used for JWT token signing.
-    # In production, set the SECRET_KEY environment variable to a secure random value.
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "capitalops-dev-secret-key-change-in-production")
+    # JWT signing key. In production, set JWT_SECRET_KEY env var to a strong random value.
+    # Falls back to SECRET_KEY for compatibility, then to a dev-only default.
+    app.config["JWT_SECRET_KEY"] = os.environ.get(
+        "JWT_SECRET_KEY",
+        os.environ.get("SECRET_KEY", "capitalops-dev-jwt-secret-change-in-production")
+    )
 
-    # JWT token expiration time in hours (default: 24 hours)
-    app.config["JWT_EXPIRATION_HOURS"] = int(os.environ.get("JWT_EXPIRATION_HOURS", "24"))
+    # Access token expiration — 1 hour by default, configurable via env var (in minutes)
+    access_token_minutes = int(os.environ.get("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", "60"))
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=access_token_minutes)
+
+    # Token location — only accept JWTs from the Authorization header (Bearer scheme)
+    app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+    app.config["JWT_HEADER_NAME"] = "Authorization"
+    app.config["JWT_HEADER_TYPE"] = "Bearer"
 
     # PostgreSQL connection string provided by Replit's managed database
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
@@ -69,6 +83,7 @@ def create_app():
     # --- Initialize Extensions ---
 
     db.init_app(app)
+    jwt.init_app(app)
 
     # Enable CORS for the React frontend.
     # In production, restrict origins to the capitalops-web domain.
@@ -78,6 +93,29 @@ def create_app():
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
     }})
+
+    # --- JWT Error Handlers ---
+    # Return consistent JSON error responses for all JWT-related failures
+
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        """Return 401 when the access token has expired."""
+        return jsonify({"error": "Token has expired"}), 401
+
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error_string):
+        """Return 401 when the token is malformed or invalid."""
+        return jsonify({"error": "Invalid token"}), 401
+
+    @jwt.unauthorized_loader
+    def missing_token_callback(error_string):
+        """Return 401 when no Authorization header is provided."""
+        return jsonify({"error": "Missing authorization header"}), 401
+
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_header, jwt_payload):
+        """Return 401 when the token has been revoked."""
+        return jsonify({"error": "Token has been revoked"}), 401
 
     # --- Register Blueprints ---
     # All routes are versioned under /api/v1/ and return JSON only.

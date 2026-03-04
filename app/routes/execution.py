@@ -9,16 +9,17 @@ Access restricted to:
     - general_contractor: Confirm milestone completion only
 
 Routes:
-    GET   /api/execution/                         — All projects with computed metrics
-    GET   /api/execution/projects/<id>            — Individual project with milestones
-    PATCH /api/execution/milestones/<id>          — Update milestone status/delay
-    GET   /api/execution/governance               — Governance event log
+    GET   /api/v1/execution/                         — All projects with computed metrics
+    GET   /api/v1/execution/projects/<id>            — Individual project with milestones
+    PATCH /api/v1/execution/milestones/<id>          — Update milestone status/delay
+    GET   /api/v1/execution/governance               — Governance event log
 """
 
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt
 from app import db
-from app.models import Project, Milestone, RiskFlag, Asset
-from app.auth_utils import jwt_required, role_required
+from app.models import Project, Milestone, RiskFlag
+from app.auth_utils import role_required
 from datetime import date
 
 execution_bp = Blueprint("execution", __name__)
@@ -28,7 +29,7 @@ EXECUTION_ROLES = ("sponsor_admin", "project_manager", "general_contractor")
 
 
 @execution_bp.route("/", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*EXECUTION_ROLES)
 def index():
     """
@@ -66,7 +67,7 @@ def index():
 
 
 @execution_bp.route("/projects/<int:project_id>", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*EXECUTION_ROLES)
 def project_detail(project_id):
     """
@@ -89,7 +90,7 @@ def project_detail(project_id):
 
 
 @execution_bp.route("/milestones/<int:milestone_id>", methods=["PATCH"])
-@jwt_required
+@jwt_required()
 @role_required(*EXECUTION_ROLES)
 def update_milestone(milestone_id):
     """
@@ -112,8 +113,12 @@ def update_milestone(milestone_id):
     milestone = Milestone.query.get_or_404(milestone_id)
     data = request.get_json() or {}
 
+    # Read the role from JWT claims (avoids DB lookup)
+    claims = get_jwt()
+    user_role = claims.get("role", "")
+
     # General contractors can only confirm completion
-    if g.current_user.role == "general_contractor" and data.get("status") != "Complete":
+    if user_role == "general_contractor" and data.get("status") != "Complete":
         return jsonify({"error": "General contractors can only mark milestones as complete"}), 403
 
     # Update fields from request data
@@ -133,7 +138,7 @@ def update_milestone(milestone_id):
 
 
 @execution_bp.route("/governance", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*EXECUTION_ROLES)
 def governance():
     """

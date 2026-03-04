@@ -9,17 +9,18 @@ Access restricted to:
     - vendor:             View own work orders only (future scoping)
 
 Routes:
-    GET  /api/vendor/                          — Vendor overview with stats
-    POST /api/vendor/                          — Register a new vendor
-    GET  /api/vendor/work-orders               — List all work orders
-    POST /api/vendor/work-orders               — Create a new work order
-    PATCH /api/vendor/work-orders/<id>         — Update work order status/cost
+    GET   /api/v1/vendor/                          — Vendor overview with stats
+    POST  /api/v1/vendor/                          — Register a new vendor
+    GET   /api/v1/vendor/work-orders               — List all work orders
+    POST  /api/v1/vendor/work-orders               — Create a new work order
+    PATCH /api/v1/vendor/work-orders/<id>          — Update work order status/cost
 """
 
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from app import db
 from app.models import Vendor, WorkOrder, Asset, Portfolio
-from app.auth_utils import jwt_required, role_required
+from app.auth_utils import role_required
 
 vendor_bp = Blueprint("vendor", __name__)
 
@@ -28,18 +29,13 @@ VENDOR_ROLES = ("sponsor_admin", "general_contractor", "vendor")
 
 
 @vendor_bp.route("/", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*VENDOR_ROLES)
 def index():
     """
     Vendor & Asset Control overview with computed stats.
 
-    Returns:
-        - Summary stats: total vendors, expired COIs, open work orders,
-          cost breakdown (total, CapEx, OpEx)
-        - Full vendor listing
-        - Work order listing (sorted by most recent)
-        - Asset listing
+    Returns summary stats, vendor listing, work orders, and assets.
     """
     vendors = Vendor.query.all()
     work_orders = WorkOrder.query.order_by(WorkOrder.created_at.desc()).all()
@@ -69,22 +65,13 @@ def index():
 
 
 @vendor_bp.route("/", methods=["POST"])
-@jwt_required
+@jwt_required()
 @role_required("sponsor_admin")
 def create_vendor():
     """
     Register a new vendor for an asset. Sponsor Admin only.
 
-    Expects JSON body:
-        {
-            "asset_id": 1,
-            "name": "Vendor Name",
-            "type": "Electrical",
-            "coi_status": "Current",
-            "sla_type": "Standard",
-            "performance_score": 85
-        }
-
+    Expects JSON body with asset_id, name, and vendor attributes.
     Returns (201): Created vendor object.
     Returns (400): If asset_id or name is missing.
     """
@@ -111,7 +98,7 @@ def create_vendor():
 
 
 @vendor_bp.route("/work-orders", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*VENDOR_ROLES)
 def list_work_orders():
     """List all work orders, sorted by most recent first."""
@@ -120,22 +107,13 @@ def list_work_orders():
 
 
 @vendor_bp.route("/work-orders", methods=["POST"])
-@jwt_required
+@jwt_required()
 @role_required("sponsor_admin", "general_contractor")
 def create_work_order():
     """
     Create a new work order.
 
-    Expects JSON body:
-        {
-            "vendor_id": 1,
-            "asset_id": 1,
-            "type": "Maintenance",
-            "priority": "Normal",
-            "cost": 5000,
-            "capex_flag": false
-        }
-
+    Expects JSON body with vendor_id, asset_id, and work order attributes.
     Returns (201): Created work order object.
     Returns (400): If vendor_id or asset_id is missing.
     """
@@ -162,17 +140,11 @@ def create_work_order():
 
 
 @vendor_bp.route("/work-orders/<int:wo_id>", methods=["PATCH"])
-@jwt_required
+@jwt_required()
 @role_required(*VENDOR_ROLES)
 def update_work_order(wo_id):
     """
     Update a work order's status and/or cost.
-
-    Expects JSON body with any of:
-        {
-            "status": "Complete",
-            "cost": 5500
-        }
 
     Returns (200): Updated work order object.
     """

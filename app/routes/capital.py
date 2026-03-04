@@ -10,19 +10,20 @@ Access restricted to:
     - investor_tier2:  Priority access with enhanced reporting
 
 Routes:
-    GET  /api/capital/                  — Capital Engine overview (stats + lists)
-    GET  /api/capital/deals             — Deal pipeline listing
-    GET  /api/capital/deals/<id>        — Individual deal with allocations
-    GET  /api/capital/investors         — Investor profile listing
-    POST /api/capital/investors         — Create new investor profile
-    POST /api/capital/allocations       — Create a new allocation
-    GET  /api/capital/matching          — Run deal-investor matching engine
+    GET  /api/v1/capital/                  — Capital Engine overview (stats + lists)
+    GET  /api/v1/capital/deals             — Deal pipeline listing
+    GET  /api/v1/capital/deals/<id>        — Individual deal with allocations
+    GET  /api/v1/capital/investors         — Investor profile listing
+    POST /api/v1/capital/investors         — Create new investor profile
+    POST /api/v1/capital/allocations       — Create a new allocation
+    GET  /api/v1/capital/matching          — Run deal-investor matching engine
 """
 
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from app import db
-from app.models import Deal, Investor, Allocation, Project, Asset
-from app.auth_utils import jwt_required, role_required
+from app.models import Deal, Investor, Allocation
+from app.auth_utils import role_required
 
 capital_bp = Blueprint("capital", __name__)
 
@@ -31,7 +32,7 @@ CAPITAL_ROLES = ("sponsor_admin", "investor_tier1", "investor_tier2")
 
 
 @capital_bp.route("/", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*CAPITAL_ROLES)
 def index():
     """
@@ -57,7 +58,7 @@ def index():
 
 
 @capital_bp.route("/deals", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*CAPITAL_ROLES)
 def deals():
     """List all deals in the pipeline."""
@@ -66,14 +67,11 @@ def deals():
 
 
 @capital_bp.route("/deals/<int:deal_id>", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*CAPITAL_ROLES)
 def deal_detail(deal_id):
     """
     Individual deal detail with allocations and available investors.
-
-    Returns the deal, its allocations, and active investors
-    (for the allocation creation form on the frontend).
     """
     deal = Deal.query.get_or_404(deal_id)
     allocations = Allocation.query.filter_by(deal_id=deal_id).all()
@@ -87,7 +85,7 @@ def deal_detail(deal_id):
 
 
 @capital_bp.route("/investors", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*CAPITAL_ROLES)
 def investors():
     """List all investor profiles."""
@@ -96,20 +94,13 @@ def investors():
 
 
 @capital_bp.route("/investors", methods=["POST"])
-@jwt_required
+@jwt_required()
 @role_required("sponsor_admin")
 def create_investor():
     """
     Create a new investor profile. Sponsor Admin only.
 
-    Expects JSON body with investor fields:
-        {
-            "name": "Investor Name",
-            "accreditation_status": "Verified",
-            "check_size_min": 500000,
-            ...
-        }
-
+    Expects JSON body with investor fields.
     Returns (201): Created investor object.
     Returns (400): If name is missing.
     """
@@ -138,21 +129,13 @@ def create_investor():
 
 
 @capital_bp.route("/allocations", methods=["POST"])
-@jwt_required
+@jwt_required()
 @role_required("sponsor_admin")
 def create_allocation():
     """
     Create a new allocation (investor commitment to a deal). Sponsor Admin only.
 
-    Expects JSON body:
-        {
-            "investor_id": 1,
-            "deal_id": 1,
-            "soft_commit_amount": 500000,
-            "hard_commit_amount": 0,
-            "notes": "Initial commitment"
-        }
-
+    Expects JSON body with investor_id, deal_id, and commitment amounts.
     Returns (201): Created allocation object.
     Returns (400): If investor_id or deal_id is missing.
     """
@@ -175,7 +158,7 @@ def create_allocation():
 
 
 @capital_bp.route("/matching", methods=["GET"])
-@jwt_required
+@jwt_required()
 @role_required(*CAPITAL_ROLES)
 def matching():
     """

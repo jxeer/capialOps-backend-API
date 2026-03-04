@@ -8,7 +8,7 @@ This is the **API-only backend** (capitalops-api). The React frontend (capitalop
 ## Architecture
 - **Backend**: Python/Flask — pure JSON API (no templates, no server-rendered HTML)
 - **Database**: PostgreSQL (Replit-managed via DATABASE_URL)
-- **Auth**: JWT (PyJWT) — stateless Bearer token authentication
+- **Auth**: flask-jwt-extended — stateless Bearer token authentication (1h access tokens)
 - **CORS**: Flask-CORS configured for cross-origin React frontend requests
 - **API Versioning**: All routes under `/api/v1/`
 
@@ -18,7 +18,7 @@ main.py                          # Entry point (Flask API on port 5000)
 app/
   __init__.py                    # App factory, DB init, CORS, seed data
   models.py                     # SQLAlchemy models (10 entities, all with to_dict())
-  auth_utils.py                 # JWT token generation, validation, decorators
+  auth_utils.py                 # get_current_user(), role_required() (uses flask-jwt-extended)
   routes/
     auth.py                     # POST /api/v1/auth/login, GET /api/v1/auth/me
     dashboard.py                # GET /api/v1/dashboard/
@@ -33,8 +33,9 @@ All routes (except POST /api/v1/auth/login) require a JWT in the Authorization h
 Authorization: Bearer <jwt_token>
 ```
 
-Token payload: `{ user_id, role, exp, iat }`
-Default expiration: 24 hours (configurable via JWT_EXPIRATION_HOURS env var)
+Token identity: `str(user.id)` (stringified integer — PyJWT 2.x requires string subjects)
+Additional claims: `{ role: "sponsor_admin" }`
+Default expiration: 1 hour (configurable via JWT_ACCESS_TOKEN_EXPIRES_MINUTES env var)
 
 ## API Route Summary (v1)
 - `POST /api/v1/auth/login`       — Authenticate, returns JWT + user profile
@@ -89,15 +90,14 @@ Module 3 (Vendor) → Module 2 (Execution) → Module 1 (Capital)
 Operational truth → Governance interpretation → Investor transparency
 
 ## Key Dependencies
-- flask, flask-sqlalchemy, flask-cors
-- pyjwt
+- flask, flask-sqlalchemy, flask-cors, flask-jwt-extended
 - psycopg2-binary
 - werkzeug, gunicorn
 
 ## Environment Variables
 - `DATABASE_URL` — PostgreSQL connection string (required)
-- `SECRET_KEY` — JWT signing key (defaults to dev key)
-- `JWT_EXPIRATION_HOURS` — Token expiration in hours (default: 24)
+- `JWT_SECRET_KEY` — JWT signing key (falls back to SECRET_KEY, then dev default)
+- `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` — Token expiration in minutes (default: 60)
 - `CORS_ORIGINS` — Comma-separated allowed origins (default: *)
 
 ## Commenting Convention
