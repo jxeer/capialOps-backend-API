@@ -1,90 +1,145 @@
-# CAPITALOPS
+# CAPITALOPS API
 
 **Capital + Governance Operating Layer — Built on Coral8**
 
-CapitalOps is a capital and governance operating layer designed for real estate development firms. It handles investor alignment, deal distribution, governance interpretation, vendor and maintenance visibility, and structured reporting — all layered on top of Coral8's execution backbone.
+CapitalOps API is a pure JSON API backend for real estate development capital and governance operations. It handles investor alignment, deal distribution, governance interpretation, vendor and maintenance visibility, and structured reporting.
+
+This is the **API backend** (`capitalops-api`). The React/TypeScript frontend (`capitalops-web`) is a separate project that communicates with this API via `Authorization: Bearer <JWT>`.
 
 ---
 
-## System Architecture
-
-CapitalOps is organized into three modules that reflect how operational data flows upward into investor-grade transparency:
+## Architecture
 
 ```
-Module 3: Asset & Vendor Control
+capitalops-api (this repo)          capitalops-web (separate repo)
+┌───────────────────────┐           ┌───────────────────────┐
+│  Flask JSON API       │◄──JWT───►│  React + TypeScript   │
+│  PostgreSQL + SQLAlchemy│          │  Vite                 │
+│  JWT Auth             │           │  Bearer Token Auth    │
+└───────────────────────┘           └───────────────────────┘
+```
+
+Three modules reflect how operational data flows upward into investor-grade transparency:
+
+```
+Module 3: Asset & Vendor Control (/api/vendor)
          ↓
-Module 2: Execution Control
+Module 2: Execution Control (/api/execution)
          ↓
-Module 1: Capital Engine
+Module 1: Capital Engine (/api/capital)
 ```
 
 **Operational truth → Governance interpretation → Investor transparency**
 
-### Module 1: Capital Engine
+---
 
-Curated deal distribution and investor transparency.
+## Authentication
 
-- Investor profile management
-- Deal tagging and pipeline tracking
-- Rule-based deal-investor matching
-- Sponsor-approved distribution
-- Allocation tracking (soft commit / hard commit)
-- Investor transparency dashboard
+All API routes (except login) require a JWT in the Authorization header:
 
-### Module 2: Execution Control
+```
+POST /api/auth/login
+Content-Type: application/json
 
-Translates raw project data into governance-level clarity.
+{"username": "admin", "password": "admin123"}
+```
 
-- Milestone rollups and progress tracking
-- Budget vs. actual summary with variance reporting
-- Risk flag triggers
-- Delay explanations
-- Governance event log
+Response:
+```json
+{
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "user": {
+        "id": 1,
+        "username": "admin",
+        "role": "sponsor_admin",
+        "role_display": "Sponsor Admin",
+        ...
+    }
+}
+```
 
-### Module 3: Asset & Vendor Control
-
-Operational discipline and asset protection.
-
-- Vendor registration and management
-- COI (Certificate of Insurance) status tracking
-- Work order creation and tracking
-- CapEx vs. OpEx classification
-- SLA tagging
-- Performance scoring
+Use the token on all subsequent requests:
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
 
 ---
 
-## Data Model
+## API Endpoints
 
-The system is built on 10 core entities, all linked to a top-level `Portfolio` for future multi-portfolio scaling:
+### Auth
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/auth/login` | Authenticate, receive JWT |
+| GET | `/api/auth/me` | Current user profile |
 
-| Entity | Purpose |
-|---|---|
-| **Portfolio** | Top-level grouping for all assets and projects |
-| **Asset** | Real estate properties (location, type, square footage) |
-| **Project** | Development projects linked to assets (budget, phase, timeline) |
-| **Deal** | Capital raise structures per project |
-| **Investor** | Investor profiles with preferences and accreditation |
-| **Allocation** | Investor commitments to specific deals |
-| **Milestone** | Project milestones with risk flags and delay tracking |
-| **Vendor** | Contractors and service providers per asset |
-| **WorkOrder** | Vendor work assignments with cost and priority |
-| **RiskFlag** | Category-based risk tracking per project |
+### Dashboard
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/dashboard/` | Portfolio overview stats |
+
+### Module 1: Capital Engine
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/capital/` | Capital overview (stats + lists) |
+| GET | `/api/capital/deals` | Deal pipeline |
+| GET | `/api/capital/deals/:id` | Deal detail + allocations |
+| GET | `/api/capital/investors` | Investor listing |
+| POST | `/api/capital/investors` | Create investor (admin) |
+| POST | `/api/capital/allocations` | Create allocation (admin) |
+| GET | `/api/capital/matching` | Deal-investor matching engine |
+
+### Module 2: Execution Control
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/execution/` | All projects with metrics |
+| GET | `/api/execution/projects/:id` | Project detail + milestones |
+| PATCH | `/api/execution/milestones/:id` | Update milestone |
+| GET | `/api/execution/governance` | Governance event log |
+
+### Module 3: Asset & Vendor Control
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/vendor/` | Vendor overview + stats |
+| POST | `/api/vendor/` | Register vendor (admin) |
+| GET | `/api/vendor/work-orders` | Work order listing |
+| POST | `/api/vendor/work-orders` | Create work order |
+| PATCH | `/api/vendor/work-orders/:id` | Update work order |
 
 ---
 
 ## Role-Based Access Control
 
-Permissions are enforced at both the route and API level:
+Permissions are enforced at the route level via JWT role claims:
 
 | Role | Access |
 |---|---|
 | **Sponsor Admin** | Full access to all three modules |
-| **Project Manager** | Execution module — milestones, delays, budgets |
-| **General Contractor** | Confirm milestone completion, limited vendor access |
+| **Project Manager** | Execution module only |
+| **General Contractor** | Confirm milestones, limited vendor access |
 | **Vendor** | Own work orders only |
-| **Investor (Tier 1)** | View matched deals, submit allocation requests |
+| **Investor (Tier 1)** | View matched deals, submit allocations |
 | **Priority Investor (Tier 2)** | Early access, enhanced reporting |
+
+---
+
+## Data Model
+
+10 core entities, all with `to_dict()` serialization and `portfolio_id` for multi-portfolio scaling:
+
+| Entity | Purpose |
+|---|---|
+| **User** | JWT auth with role-based access |
+| **Portfolio** | Top-level grouping for all assets and projects |
+| **Asset** | Real estate properties |
+| **Project** | Development projects linked to assets |
+| **Deal** | Capital raise structures per project |
+| **Investor** | Investor profiles with preferences |
+| **Allocation** | Investor commitments to deals |
+| **Milestone** | Project milestones with risk flags |
+| **Vendor** | Contractors and service providers |
+| **WorkOrder** | Vendor work assignments with CapEx/OpEx classification |
+| **RiskFlag** | Category-based risk tracking |
 
 ---
 
@@ -93,9 +148,8 @@ Permissions are enforced at both the route and API level:
 - **Backend**: Python / Flask
 - **ORM**: SQLAlchemy
 - **Database**: PostgreSQL
-- **Auth**: Flask-Login with session-based authentication
-- **Security**: CSRF protection (Flask-WTF), role-enforced API endpoints
-- **Frontend**: Server-rendered Jinja2 templates, custom dark-theme CSS
+- **Auth**: PyJWT (stateless Bearer tokens)
+- **CORS**: Flask-CORS (for React frontend cross-origin requests)
 
 ---
 
@@ -107,17 +161,24 @@ Permissions are enforced at both the route and API level:
 - PostgreSQL database
 - `DATABASE_URL` environment variable set
 
-### Running the Application
+### Running the API
 
 ```bash
 python main.py
 ```
 
-The application starts on `http://0.0.0.0:5000`.
+The API starts on `http://0.0.0.0:5000`.
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `SECRET_KEY` | No | dev key | JWT signing key |
+| `JWT_EXPIRATION_HOURS` | No | 24 | Token expiration in hours |
+| `CORS_ORIGINS` | No | * | Comma-separated allowed origins |
 
 ### Demo Accounts
-
-The application seeds demo data automatically in development:
 
 | Role | Username | Password |
 |---|---|---|
@@ -132,51 +193,13 @@ The application seeds demo data automatically in development:
 ```
 main.py                       Entry point
 app/
-  __init__.py                 App factory, database init, seed data
-  models.py                  SQLAlchemy models (10 entities)
+  __init__.py                 App factory, DB init, CORS, seed data
+  models.py                  SQLAlchemy models (10 entities, all serializable)
+  auth_utils.py              JWT generation, validation, route decorators
   routes/
-    auth.py                  Login / logout
-    dashboard.py             Portfolio dashboard
+    auth.py                  Login + current user
+    dashboard.py             Portfolio overview
     capital.py               Module 1: Capital Engine
     execution.py             Module 2: Execution Control
     vendor.py                Module 3: Asset & Vendor Control
-    api.py                   JSON API endpoints (role-enforced)
-  templates/
-    base.html                Layout with sidebar navigation
-    auth/                    Login page
-    dashboard/               Portfolio overview
-    capital/                 Deals, investors, matching, allocations
-    execution/               Projects, milestones, governance log
-    vendor/                  Vendors, work orders
-  static/
-    css/style.css            Dark theme stylesheet
 ```
-
----
-
-## What This System Does Not Do
-
-Per the operational blueprint, CapitalOps intentionally avoids:
-
-- Full accounting engine
-- Full property management system
-- AI recommendation engine
-- Marketplace functionality
-- Public deal directory
-- Tokenization
-- CRM replacement
-
-Scope discipline is survival.
-
----
-
-## MVP Success Metrics
-
-The system is working when:
-
-- Investor conversations are shorter
-- Allocation happens faster
-- PM explanations are structured
-- Vendor discipline improves
-- No milestone drifts silently
-- You stop chasing capital and start selecting it

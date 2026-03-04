@@ -1,85 +1,53 @@
 """
-CapitalOps - Module 3: Asset & Vendor Control Routes
+CapitalOps API - Module 3: Asset & Vendor Control Routes
 
 Handles vendor management, work order tracking, and operational discipline.
-This is the foundation layer of the data flow — operational truth from
-vendor/maintenance activities flows upward into Execution Control (Module 2)
-and ultimately into investor transparency (Module 1).
 
 Access restricted to:
     - sponsor_admin:      Full access (add vendors, create/update work orders)
     - general_contractor: View vendors, create/update work orders
     - vendor:             View own work orders only (future scoping)
 
-Key features:
-    - Vendor registration with COI and SLA tracking
-    - Work order creation and status management
-    - CapEx vs OpEx cost classification
-    - Performance scoring and compliance monitoring
-
 Routes:
-    GET  /vendor/                          — Vendor & asset overview dashboard
-    GET  /vendor/add                       — Add vendor form (Sponsor Admin only)
-    POST /vendor/add                       — Create new vendor record
-    GET  /vendor/work-orders/create        — Work order creation form
-    POST /vendor/work-orders/create        — Create new work order
-    POST /vendor/work-orders/<id>/update   — Update work order status/cost
+    GET  /api/vendor/                          — Vendor overview with stats
+    POST /api/vendor/                          — Register a new vendor
+    GET  /api/vendor/work-orders               — List all work orders
+    POST /api/vendor/work-orders               — Create a new work order
+    PATCH /api/vendor/work-orders/<id>         — Update work order status/cost
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required, current_user
+from flask import Blueprint, request, jsonify, g
 from app import db
-from app.models import Vendor, WorkOrder, Asset
-from functools import wraps
+from app.models import Vendor, WorkOrder, Asset, Portfolio
+from app.auth_utils import jwt_required, role_required
 
 vendor_bp = Blueprint("vendor", __name__)
 
-
-def vendor_access_required(f):
-    """
-    Decorator to restrict access to Asset & Vendor Control routes.
-
-    Only sponsor_admin, general_contractor, and vendor roles
-    can access Module 3. Investors and PMs are redirected to the dashboard.
-    """
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if current_user.role not in ("sponsor_admin", "general_contractor", "vendor"):
-            flash("Access denied.", "error")
-            return redirect(url_for("dashboard.index"))
-        return f(*args, **kwargs)
-    return decorated
+# Roles permitted to access Asset & Vendor Control routes
+VENDOR_ROLES = ("sponsor_admin", "general_contractor", "vendor")
 
 
-@vendor_bp.route("/")
-@login_required
-@vendor_access_required
+@vendor_bp.route("/", methods=["GET"])
+@jwt_required
+@role_required(*VENDOR_ROLES)
 def index():
     """
-    Vendor & Asset Control overview dashboard.
+    Vendor & Asset Control overview with computed stats.
 
-    Displays:
+    Returns:
         - Summary stats: total vendors, expired COIs, open work orders,
-          total cost breakdown (CapEx vs OpEx)
-        - Vendor listing with COI status, SLA type, and performance scores
-        - Work order listing with priority, cost, and completion actions
-
-    The COI (Certificate of Insurance) expired count is a key compliance
-    metric — vendors with expired COIs need immediate attention.
+          cost breakdown (total, CapEx, OpEx)
+        - Full vendor listing
+        - Work order listing (sorted by most recent)
+        - Asset listing
     """
     vendors = Vendor.query.all()
     work_orders = WorkOrder.query.order_by(WorkOrder.created_at.desc()).all()
     assets = Asset.query.all()
 
-    # --- Compute summary statistics ---
-
-    # Count vendors with expired insurance certificates
+    # Compute summary statistics
     coi_expired = sum(1 for v in vendors if v.coi_status == "Expired")
-
-    # Count work orders that are still open (not completed or cancelled)
     open_orders = sum(1 for wo in work_orders if wo.status not in ("Complete", "Cancelled"))
-
-    # Calculate cost breakdown: total, CapEx (capital expenditures), and OpEx (operating expenses)
     total_cost = sum(float(wo.cost or 0) for wo in work_orders)
     capex_total = sum(float(wo.cost or 0) for wo in work_orders if wo.capex_flag)
 
@@ -92,111 +60,129 @@ def index():
         "opex_total": total_cost - capex_total,
     }
 
-    return render_template("vendor/index.html", vendors=vendors, work_orders=work_orders, assets=assets, stats=stats)
+    return jsonify({
+        "stats": stats,
+        "vendors": [v.to_dict() for v in vendors],
+        "work_orders": [wo.to_dict() for wo in work_orders],
+        "assets": [a.to_dict() for a in assets],
+    })
 
 
-@vendor_bp.route("/add", methods=["GET", "POST"])
-@login_required
-@vendor_access_required
-def add_vendor():
+@vendor_bp.route("/", methods=["POST"])
+@jwt_required
+@role_required("sponsor_admin")
+def create_vendor():
     """
     Register a new vendor for an asset. Sponsor Admin only.
 
-    GET:  Render the vendor registration form with asset dropdown
-          and all vendor attribute fields.
-    POST: Create the vendor record, auto-assigning the current portfolio,
-          and redirect to the vendor listing.
+    Expects JSON body:
+        {
+            "asset_id": 1,
+            "name": "Vendor Name",
+            "type": "Electrical",
+            "coi_status": "Current",
+            "sla_type": "Standard",
+            "performance_score": 85
+        }
+
+    Returns (201): Created vendor object.
+    Returns (400): If asset_id or name is missing.
     """
-    # Only Sponsor Admin can register new vendors
-    if current_user.role != "sponsor_admin":
-        flash("Only Sponsor Admin can add vendors.", "error")
-        return redirect(url_for("vendor.index"))
+    data = request.get_json()
+    if not data or not data.get("asset_id") or not data.get("name"):
+        return jsonify({"error": "asset_id and name are required"}), 400
 
-    assets = Asset.query.all()
+    # Auto-assign to the current portfolio
+    portfolio = Portfolio.query.first()
 
-    if request.method == "POST":
-        # Auto-assign to the current portfolio (single portfolio for now)
-        from app.models import Portfolio
-        portfolio = Portfolio.query.first()
+    vendor = Vendor(
+        asset_id=data["asset_id"],
+        portfolio_id=portfolio.id,
+        name=data["name"],
+        type=data.get("type", ""),
+        coi_status=data.get("coi_status", "Pending"),
+        sla_type=data.get("sla_type", "Standard"),
+        performance_score=data.get("performance_score", 0),
+    )
+    db.session.add(vendor)
+    db.session.commit()
 
-        vendor = Vendor(
-            asset_id=request.form["asset_id"],
-            portfolio_id=portfolio.id,
-            name=request.form["name"],
-            type=request.form.get("type", ""),
-            coi_status=request.form.get("coi_status", "Pending"),
-            sla_type=request.form.get("sla_type", "Standard"),
-            performance_score=int(request.form.get("performance_score", 0)),
-        )
-        db.session.add(vendor)
-        db.session.commit()
-        flash("Vendor added successfully.", "success")
-        return redirect(url_for("vendor.index"))
-
-    return render_template("vendor/add_vendor.html", assets=assets)
+    return jsonify({"vendor": vendor.to_dict()}), 201
 
 
-@vendor_bp.route("/work-orders/create", methods=["GET", "POST"])
-@login_required
-@vendor_access_required
+@vendor_bp.route("/work-orders", methods=["GET"])
+@jwt_required
+@role_required(*VENDOR_ROLES)
+def list_work_orders():
+    """List all work orders, sorted by most recent first."""
+    work_orders = WorkOrder.query.order_by(WorkOrder.created_at.desc()).all()
+    return jsonify({"work_orders": [wo.to_dict() for wo in work_orders]})
+
+
+@vendor_bp.route("/work-orders", methods=["POST"])
+@jwt_required
+@role_required("sponsor_admin", "general_contractor")
 def create_work_order():
     """
-    Create a new work order assigning work to a vendor.
+    Create a new work order.
 
-    GET:  Render the work order creation form with vendor/asset dropdowns,
-          work type, priority, cost, and CapEx classification fields.
-    POST: Create the work order with "Open" status and redirect to vendor listing.
+    Expects JSON body:
+        {
+            "vendor_id": 1,
+            "asset_id": 1,
+            "type": "Maintenance",
+            "priority": "Normal",
+            "cost": 5000,
+            "capex_flag": false
+        }
 
-    The CapEx flag (capex_flag) distinguishes capital expenditures from
-    operating expenses — this classification is important for financial
-    reporting and governance.
+    Returns (201): Created work order object.
+    Returns (400): If vendor_id or asset_id is missing.
     """
-    vendors = Vendor.query.all()
-    assets = Asset.query.all()
+    data = request.get_json()
+    if not data or not data.get("vendor_id") or not data.get("asset_id"):
+        return jsonify({"error": "vendor_id and asset_id are required"}), 400
 
-    if request.method == "POST":
-        # Auto-assign to the current portfolio
-        from app.models import Portfolio
-        portfolio = Portfolio.query.first()
+    portfolio = Portfolio.query.first()
 
-        wo = WorkOrder(
-            vendor_id=request.form["vendor_id"],
-            asset_id=request.form["asset_id"],
-            portfolio_id=portfolio.id,
-            type=request.form.get("type", ""),
-            priority=request.form.get("priority", "Normal"),
-            cost=request.form.get("cost", 0),
-            capex_flag=request.form.get("capex_flag") == "on",  # Checkbox sends "on" when checked
-            status="Open",
-        )
-        db.session.add(wo)
-        db.session.commit()
-        flash("Work order created.", "success")
-        return redirect(url_for("vendor.index"))
+    wo = WorkOrder(
+        vendor_id=data["vendor_id"],
+        asset_id=data["asset_id"],
+        portfolio_id=portfolio.id,
+        type=data.get("type", ""),
+        priority=data.get("priority", "Normal"),
+        cost=data.get("cost", 0),
+        capex_flag=data.get("capex_flag", False),
+        status="Open",
+    )
+    db.session.add(wo)
+    db.session.commit()
 
-    return render_template("vendor/create_work_order.html", vendors=vendors, assets=assets)
+    return jsonify({"work_order": wo.to_dict()}), 201
 
 
-@vendor_bp.route("/work-orders/<int:wo_id>/update", methods=["POST"])
-@login_required
-@vendor_access_required
+@vendor_bp.route("/work-orders/<int:wo_id>", methods=["PATCH"])
+@jwt_required
+@role_required(*VENDOR_ROLES)
 def update_work_order(wo_id):
     """
     Update a work order's status and/or cost.
 
-    Used primarily for marking work orders as complete from the
-    vendor listing page. Cost can also be updated if the final
-    amount differs from the estimate.
+    Expects JSON body with any of:
+        {
+            "status": "Complete",
+            "cost": 5500
+        }
+
+    Returns (200): Updated work order object.
     """
     wo = WorkOrder.query.get_or_404(wo_id)
+    data = request.get_json() or {}
 
-    # Update status (e.g., Open → Complete)
-    wo.status = request.form.get("status", wo.status)
-
-    # Optionally update cost if provided
-    if request.form.get("cost"):
-        wo.cost = request.form["cost"]
+    if "status" in data:
+        wo.status = data["status"]
+    if "cost" in data:
+        wo.cost = data["cost"]
 
     db.session.commit()
-    flash("Work order updated.", "success")
-    return redirect(url_for("vendor.index"))
+    return jsonify({"work_order": wo.to_dict()})

@@ -1,48 +1,43 @@
 """
-CapitalOps - Portfolio Dashboard Route
+CapitalOps API - Portfolio Dashboard Route
 
-The main landing page after login. Provides a high-level operational overview
-across all active projects, aggregating data from all three modules:
-
-    - Module 1 stats: Capital raised vs required, active investors
-    - Module 2 stats: Milestone progress, risk flags, budget variance
-    - Module 3 stats: Vendor count, expired COIs
-
-The dashboard also displays the system's data flow indicator
-(Vendor → Execution → Capital) and quick-access tables for
-project status, risk flags, and the deal pipeline.
+Returns aggregated portfolio-level metrics across all three modules.
+Used by the React frontend's main dashboard view.
 
 Routes:
-    GET / — Render the portfolio dashboard (requires authentication)
+    GET /api/dashboard/ — Portfolio overview with aggregated stats
 """
 
-from flask import Blueprint, render_template
-from flask_login import login_required, current_user
+from flask import Blueprint, jsonify, g
 from app.models import Project, Deal, Investor, Milestone, Vendor, Asset, WorkOrder, RiskFlag
-from app import db
-from sqlalchemy import func
+from app.auth_utils import jwt_required
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
-@dashboard_bp.route("/")
-@login_required
+@dashboard_bp.route("/", methods=["GET"])
+@jwt_required
 def index():
     """
-    Render the portfolio dashboard with aggregated stats from all modules.
+    Return aggregated portfolio stats from all three modules.
 
-    Computes the following metrics:
+    Computes:
         - Active project count (excludes completed projects)
         - Total budget vs actual spend across all projects
         - Capital raised vs required across all deals
         - Capital raise percentage
         - Milestone completion progress (percentage)
-        - Active risk flag count (milestones with risk_flag=True)
+        - Active risk flag count
         - Active investor count
         - Vendor count and expired COI count
 
-    All stats are passed to the template as a dictionary for display
-    in the stats grid cards.
+    Returns (200):
+        {
+            "stats": { ...aggregated metrics... },
+            "projects": [ ...project list... ],
+            "deals": [ ...deal list... ],
+            "risk_milestones": [ ...flagged milestones... ]
+        }
     """
     # Query all core data needed for dashboard aggregations
     projects = Project.query.all()
@@ -60,7 +55,6 @@ def index():
     total_capital_raised = sum(float(d.capital_raised or 0) for d in deals)
 
     # --- Milestone Progress ---
-    # Calculate overall completion percentage across all projects
     milestones = Milestone.query.all()
     completed = sum(1 for m in milestones if m.status == "Complete")
     total_milestones = len(milestones)
@@ -69,7 +63,6 @@ def index():
     # --- Vendor Compliance ---
     coi_expired = sum(1 for v in vendors if v.coi_status == "Expired")
 
-    # Assemble all dashboard stats into a single dict for the template
     stats = {
         "active_projects": len([p for p in projects if p.status != "Complete"]),
         "total_budget": total_budget,
@@ -85,10 +78,9 @@ def index():
         "coi_expired": coi_expired,
     }
 
-    return render_template(
-        "dashboard/index.html",
-        stats=stats,
-        projects=projects,
-        deals=deals,
-        risk_milestones=risk_milestones,
-    )
+    return jsonify({
+        "stats": stats,
+        "projects": [p.to_dict() for p in projects],
+        "deals": [d.to_dict() for d in deals],
+        "risk_milestones": [m.to_dict() for m in risk_milestones],
+    })

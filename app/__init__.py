@@ -1,19 +1,22 @@
 """
-CapitalOps - Application Factory & Initialization
+CapitalOps API - Application Factory & Initialization
+
+Pure JSON API backend for the CapitalOps operating layer.
+No server-rendered templates — designed to be consumed by the
+capitalops-web React frontend via Authorization: Bearer <JWT>.
 
 This module defines the Flask application factory (create_app), which:
-  1. Configures the app (secret key, database URI, SQLAlchemy options)
-  2. Initializes extensions (SQLAlchemy, Flask-Login, CSRF protection)
-  3. Registers all route blueprints organized by module
+  1. Configures the app (secret key, database URI, SQLAlchemy options, JWT settings)
+  2. Initializes extensions (SQLAlchemy, Flask-CORS)
+  3. Registers all API route blueprints
   4. Creates database tables and seeds demo data in development
 
-The application follows a modular blueprint architecture:
-  - auth_bp:      Authentication (login/logout)
-  - dashboard_bp: Portfolio-level overview dashboard (root /)
-  - capital_bp:   Module 1 — Capital Engine (/capital)
-  - execution_bp: Module 2 — Execution Control (/execution)
-  - vendor_bp:    Module 3 — Asset & Vendor Control (/vendor)
-  - api_bp:       JSON API endpoints (/api)
+Blueprint architecture:
+  - auth_bp:      /api/auth      — JWT authentication (login, register, me)
+  - capital_bp:   /api/capital    — Module 1: Capital Engine
+  - execution_bp: /api/execution  — Module 2: Execution Control
+  - vendor_bp:    /api/vendor     — Module 3: Asset & Vendor Control
+  - dashboard_bp: /api/dashboard  — Portfolio overview aggregations
 
 Extensions are declared at module level so they can be imported
 by other modules (e.g., `from app import db`).
@@ -22,19 +25,12 @@ by other modules (e.g., `from app import db`).
 import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect
+from flask_cors import CORS
 
 # --- Extension Instances (module-level for shared access) ---
 
 # SQLAlchemy ORM instance — manages all database models and sessions
 db = SQLAlchemy()
-
-# Flask-Login manager — handles user session management and authentication
-login_manager = LoginManager()
-
-# CSRF protection — prevents cross-site request forgery on all POST forms
-csrf = CSRFProtect()
 
 
 def create_app():
@@ -51,10 +47,12 @@ def create_app():
 
     # --- App Configuration ---
 
-    # Secret key for session signing and CSRF tokens.
-    # Uses a stable default in development so tokens survive server restarts.
+    # Secret key used for JWT token signing.
     # In production, set the SECRET_KEY environment variable to a secure random value.
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "capitalops-dev-secret-key-change-in-production")
+
+    # JWT token expiration time in hours (default: 24 hours)
+    app.config["JWT_EXPIRATION_HOURS"] = int(os.environ.get("JWT_EXPIRATION_HOURS", "24"))
 
     # PostgreSQL connection string provided by Replit's managed database
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
@@ -71,38 +69,30 @@ def create_app():
     # --- Initialize Extensions ---
 
     db.init_app(app)
-    login_manager.init_app(app)
-    csrf.init_app(app)
 
-    # Redirect unauthenticated users to the login page
-    login_manager.login_view = "auth.login"
-
-    # --- User Loader Callback ---
-    # Flask-Login calls this to reload the user object from the session's stored user ID
-    from app.models import User
-
-    @login_manager.user_loader
-    def load_user(user_id):
-        """Load a user by their primary key ID for Flask-Login session management."""
-        return db.session.get(User, int(user_id))
+    # Enable CORS for the React frontend.
+    # In production, restrict origins to the capitalops-web domain.
+    CORS(app, resources={r"/api/*": {
+        "origins": os.environ.get("CORS_ORIGINS", "*").split(","),
+        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True,
+    }})
 
     # --- Register Blueprints ---
-    # Each blueprint corresponds to a functional area of the application.
-    # URL prefixes keep module routes cleanly separated.
+    # All routes are under the /api prefix and return JSON.
 
     from app.routes.auth import auth_bp
     from app.routes.dashboard import dashboard_bp
     from app.routes.capital import capital_bp
     from app.routes.execution import execution_bp
     from app.routes.vendor import vendor_bp
-    from app.routes.api import api_bp
 
-    app.register_blueprint(auth_bp)                              # /login, /logout
-    app.register_blueprint(dashboard_bp)                         # / (root dashboard)
-    app.register_blueprint(capital_bp, url_prefix="/capital")     # Module 1
-    app.register_blueprint(execution_bp, url_prefix="/execution") # Module 2
-    app.register_blueprint(vendor_bp, url_prefix="/vendor")       # Module 3
-    app.register_blueprint(api_bp, url_prefix="/api")             # JSON API
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
+    app.register_blueprint(capital_bp, url_prefix="/api/capital")
+    app.register_blueprint(execution_bp, url_prefix="/api/execution")
+    app.register_blueprint(vendor_bp, url_prefix="/api/vendor")
 
     # --- Database Initialization ---
     with app.app_context():
@@ -214,7 +204,7 @@ def seed_demo_data():
     # --- Projects ---
     # Each project is linked to one asset and represents a development effort
 
-    from datetime import date, timedelta
+    from datetime import date
 
     # Project 1: Active construction, on track
     project1 = Project(

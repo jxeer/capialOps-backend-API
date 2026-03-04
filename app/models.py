@@ -1,5 +1,5 @@
 """
-CapitalOps - Database Models
+CapitalOps API - Database Models
 
 Defines all SQLAlchemy ORM models for the CapitalOps data layer.
 The schema follows the operational blueprint's 10 core entities, with every
@@ -22,17 +22,16 @@ Data Flow (per blueprint):
 """
 
 from app import db
-from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 
 
-class User(UserMixin, db.Model):
+class User(db.Model):
     """
     Application user with role-based access control.
 
-    Inherits from UserMixin to provide Flask-Login compatibility
-    (is_authenticated, is_active, get_id, etc.).
+    Used for JWT authentication — the user logs in via /api/auth/login
+    and receives a JWT containing their user ID and role.
 
     Roles and their module access:
         - sponsor_admin:      Full access to all three modules + admin actions
@@ -77,7 +76,7 @@ class User(UserMixin, db.Model):
 
     @property
     def role_display(self):
-        """Return a human-readable label for the user's role (used in sidebar/UI)."""
+        """Return a human-readable label for the user's role."""
         labels = {
             "sponsor_admin": "Sponsor Admin",
             "project_manager": "Project Manager",
@@ -88,6 +87,18 @@ class User(UserMixin, db.Model):
         }
         return labels.get(self.role, self.role)
 
+    def to_dict(self):
+        """Serialize user to a JSON-safe dictionary (excludes password hash)."""
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "role": self.role,
+            "role_display": self.role_display,
+            "full_name": self.full_name,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class Portfolio(db.Model):
     """
@@ -95,7 +106,7 @@ class Portfolio(db.Model):
 
     Currently only one portfolio exists, but the schema is designed so that
     all downstream entities carry a portfolio_id for future multi-portfolio expansion
-    without requiring a schema rewrite (per the blueprint's scalability directive).
+    without requiring a schema rewrite.
     """
     __tablename__ = "portfolios"
 
@@ -107,14 +118,22 @@ class Portfolio(db.Model):
     # One portfolio has many assets
     assets = db.relationship("Asset", backref="portfolio", lazy=True)
 
+    def to_dict(self):
+        """Serialize portfolio to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class Asset(db.Model):
     """
     A real estate property within a portfolio.
 
     Represents a physical property with key attributes like location,
-    asset type (Multifamily, Mixed-Use, Commercial, etc.), and status
-    (Pre-dev, Active, Stabilized).
+    asset type (Multifamily, Mixed-Use, Commercial, etc.), and status.
 
     Each asset can have multiple projects and vendors assigned to it.
     """
@@ -135,6 +154,20 @@ class Asset(db.Model):
     # One asset can have multiple vendors assigned
     vendors = db.relationship("Vendor", backref="asset", lazy=True)
 
+    def to_dict(self):
+        """Serialize asset to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "portfolio_id": self.portfolio_id,
+            "name": self.name,
+            "location": self.location,
+            "asset_type": self.asset_type,
+            "square_footage": self.square_footage,
+            "status": self.status,
+            "asset_manager": self.asset_manager,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class Project(db.Model):
     """
@@ -143,9 +176,6 @@ class Project(db.Model):
     Tracks the project lifecycle including phase, budget, timeline, and
     assigned project manager. Projects are the central hub connecting
     deals (capital) and milestones (execution) to an asset.
-
-    Budget fields use Numeric(15,2) to handle values up to $9.99 trillion
-    with cent-level precision.
     """
     __tablename__ = "projects"
 
@@ -165,6 +195,23 @@ class Project(db.Model):
     deals = db.relationship("Deal", backref="project", lazy=True)
     # One project has many milestones for progress tracking
     milestones = db.relationship("Milestone", backref="project", lazy=True)
+
+    def to_dict(self):
+        """Serialize project to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "asset_id": self.asset_id,
+            "asset_name": self.asset.name if self.asset else None,
+            "portfolio_id": self.portfolio_id,
+            "phase": self.phase,
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "target_completion": self.target_completion.isoformat() if self.target_completion else None,
+            "budget_total": float(self.budget_total or 0),
+            "budget_actual": float(self.budget_actual or 0),
+            "status": self.status,
+            "pm_assigned": self.pm_assigned,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 class Deal(db.Model):
@@ -196,14 +243,31 @@ class Deal(db.Model):
     # One deal can have many investor allocations
     allocations = db.relationship("Allocation", backref="deal", lazy=True)
 
+    def to_dict(self):
+        """Serialize deal to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "project_name": self.project.asset.name if self.project and self.project.asset else None,
+            "portfolio_id": self.portfolio_id,
+            "capital_required": float(self.capital_required or 0),
+            "capital_raised": float(self.capital_raised or 0),
+            "return_profile": self.return_profile,
+            "duration": self.duration,
+            "risk_level": self.risk_level,
+            "complexity": self.complexity,
+            "phase": self.phase,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class Investor(db.Model):
     """
     An investor profile with preferences used for deal matching.
 
     Stores investor attributes that the Capital Engine's matching logic
-    evaluates against open deals. Includes accreditation status, check
-    size range, asset/geography/risk preferences, and tier level.
+    evaluates against open deals.
 
     Tier levels:
         - Tier 1: Standard investor access
@@ -229,14 +293,31 @@ class Investor(db.Model):
     # One investor can have multiple allocations across deals
     allocations = db.relationship("Allocation", backref="investor", lazy=True)
 
+    def to_dict(self):
+        """Serialize investor to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "accreditation_status": self.accreditation_status,
+            "check_size_min": float(self.check_size_min or 0),
+            "check_size_max": float(self.check_size_max or 0),
+            "asset_preference": self.asset_preference,
+            "geography_preference": self.geography_preference,
+            "risk_tolerance": self.risk_tolerance,
+            "structure_preference": self.structure_preference,
+            "timeline_preference": self.timeline_preference,
+            "strategic_interest": self.strategic_interest,
+            "tier_level": self.tier_level,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class Allocation(db.Model):
     """
     An investor's capital commitment to a specific deal.
 
     Tracks both soft commits (verbal/preliminary) and hard commits (legally binding).
-    Created by the Sponsor Admin through the deal detail page in Module 1.
-
     Status flow: Pending → Approved → Funded (or Declined)
     """
     __tablename__ = "allocations"
@@ -250,18 +331,27 @@ class Allocation(db.Model):
     notes = db.Column(db.Text)                           # Free-text notes from sponsor
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def to_dict(self):
+        """Serialize allocation to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "investor_id": self.investor_id,
+            "investor_name": self.investor.name if self.investor else None,
+            "deal_id": self.deal_id,
+            "soft_commit_amount": float(self.soft_commit_amount or 0),
+            "hard_commit_amount": float(self.hard_commit_amount or 0),
+            "status": self.status,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class Milestone(db.Model):
     """
     A project milestone for tracking execution progress.
 
     Used by Module 2 (Execution Control) to provide governance-level
-    visibility into project timelines. Supports risk flagging and
-    delay explanation logging for structured PM reporting.
-
-    Categories are standardized from day one (per blueprint) even with
-    only 3 projects, to enable consistent cross-project reporting.
-
+    visibility into project timelines.
     Status flow: Not Started → In Progress → Complete
     """
     __tablename__ = "milestones"
@@ -278,14 +368,29 @@ class Milestone(db.Model):
     risk_flag = db.Column(db.Boolean, default=False)      # True if milestone is flagged as a risk
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def to_dict(self):
+        """Serialize milestone to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "portfolio_id": self.portfolio_id,
+            "name": self.name,
+            "category": self.category,
+            "target_date": self.target_date.isoformat() if self.target_date else None,
+            "completion_date": self.completion_date.isoformat() if self.completion_date else None,
+            "status": self.status,
+            "delay_explanation": self.delay_explanation,
+            "risk_flag": self.risk_flag,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class Vendor(db.Model):
     """
     A contractor or service provider assigned to an asset.
 
     Tracked in Module 3 (Asset & Vendor Control) for operational discipline.
-    Includes COI (Certificate of Insurance) compliance status, SLA type,
-    and a performance score for vendor accountability.
+    Includes COI compliance, SLA type, and performance scoring.
     """
     __tablename__ = "vendors"
 
@@ -302,14 +407,28 @@ class Vendor(db.Model):
     # One vendor can have multiple work orders
     work_orders = db.relationship("WorkOrder", backref="vendor", lazy=True)
 
+    def to_dict(self):
+        """Serialize vendor to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "asset_id": self.asset_id,
+            "asset_name": self.asset.name if self.asset else None,
+            "portfolio_id": self.portfolio_id,
+            "name": self.name,
+            "type": self.type,
+            "coi_status": self.coi_status,
+            "sla_type": self.sla_type,
+            "performance_score": self.performance_score,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class WorkOrder(db.Model):
     """
     A work assignment for a vendor on a specific asset.
 
     Tracks vendor-assigned work including type, priority, cost, and
-    CapEx vs OpEx classification. Used in Module 3 for operational
-    cost tracking and vendor accountability.
+    CapEx vs OpEx classification.
     """
     __tablename__ = "work_orders"
 
@@ -326,15 +445,30 @@ class WorkOrder(db.Model):
     photo_url = db.Column(db.String(500))            # URL for completion photo documentation
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def to_dict(self):
+        """Serialize work order to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "vendor_id": self.vendor_id,
+            "vendor_name": self.vendor.name if self.vendor else None,
+            "asset_id": self.asset_id,
+            "portfolio_id": self.portfolio_id,
+            "type": self.type,
+            "priority": self.priority,
+            "cost": float(self.cost or 0),
+            "capex_flag": self.capex_flag,
+            "status": self.status,
+            "completion_date": self.completion_date.isoformat() if self.completion_date else None,
+            "photo_url": self.photo_url,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class RiskFlag(db.Model):
     """
     A risk event associated with a project.
 
-    Provides category-based risk tracking (not custom per project)
-    to enable standardized risk reporting across the portfolio.
-    Used by Module 2 (Execution Control) in the governance event log.
-
+    Provides category-based risk tracking for standardized risk reporting.
     Status flow: Open → Resolved
     """
     __tablename__ = "risk_flags"
@@ -348,3 +482,17 @@ class RiskFlag(db.Model):
     status = db.Column(db.String(50), default="Open") # Open or Resolved
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     resolved_at = db.Column(db.DateTime)             # Timestamp when the risk was resolved
+
+    def to_dict(self):
+        """Serialize risk flag to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "portfolio_id": self.portfolio_id,
+            "category": self.category,
+            "severity": self.severity,
+            "description": self.description,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+        }

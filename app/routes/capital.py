@@ -1,215 +1,195 @@
 """
-CapitalOps - Module 1: Capital Engine Routes
+CapitalOps API - Module 1: Capital Engine Routes
 
 Handles investor alignment, deal distribution, matching logic, and
-allocation tracking. This is the investor-facing module that provides
-transparency into the capital raise process.
+allocation tracking. This is the investor-facing module.
 
 Access restricted to:
-    - sponsor_admin:   Full access (create deals, approve allocations, manage investors)
+    - sponsor_admin:   Full access (CRUD deals, approve allocations, manage investors)
     - investor_tier1:  View matched deals, submit allocation requests
     - investor_tier2:  Priority access with enhanced reporting
 
-Key features:
-    - Capital overview dashboard with raise progress
-    - Deal pipeline listing and individual deal rooms
-    - Investor profile management (add/view)
-    - Rule-based deal-investor matching engine
-    - Allocation tracking (soft commit / hard commit)
-
 Routes:
-    GET  /capital/                  — Capital Engine overview
-    GET  /capital/deals             — Deal pipeline listing
-    GET  /capital/deals/<id>        — Individual deal room with allocation form
-    GET  /capital/investors         — Investor profile listing
-    GET  /capital/investors/add     — Add investor form (Sponsor Admin only)
-    POST /capital/investors/add     — Create new investor profile
-    POST /capital/allocations/create — Create a new allocation
-    GET  /capital/matching          — Run deal-investor matching engine
+    GET  /api/capital/                  — Capital Engine overview (stats + lists)
+    GET  /api/capital/deals             — Deal pipeline listing
+    GET  /api/capital/deals/<id>        — Individual deal with allocations
+    GET  /api/capital/investors         — Investor profile listing
+    POST /api/capital/investors         — Create new investor profile
+    POST /api/capital/allocations       — Create a new allocation
+    GET  /api/capital/matching          — Run deal-investor matching engine
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required, current_user
+from flask import Blueprint, request, jsonify, g
 from app import db
 from app.models import Deal, Investor, Allocation, Project, Asset
-from functools import wraps
+from app.auth_utils import jwt_required, role_required
 
 capital_bp = Blueprint("capital", __name__)
 
-
-def capital_access_required(f):
-    """
-    Decorator to restrict access to Capital Engine routes.
-
-    Only sponsor_admin, investor_tier1, and investor_tier2 roles
-    can access Module 1. All other roles are redirected to the dashboard
-    with an access denied message.
-    """
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if current_user.role not in ("sponsor_admin", "investor_tier1", "investor_tier2"):
-            flash("Access denied. Capital Engine requires authorization.", "error")
-            return redirect(url_for("dashboard.index"))
-        return f(*args, **kwargs)
-    return decorated
+# Roles permitted to access Capital Engine routes
+CAPITAL_ROLES = ("sponsor_admin", "investor_tier1", "investor_tier2")
 
 
-@capital_bp.route("/")
-@login_required
-@capital_access_required
+@capital_bp.route("/", methods=["GET"])
+@jwt_required
+@role_required(*CAPITAL_ROLES)
 def index():
     """
-    Capital Engine overview page.
+    Capital Engine overview.
 
-    Displays aggregate capital metrics (total required, raised, gap)
-    along with active deal and investor pipeline summaries.
+    Returns aggregate capital metrics along with deal, investor,
+    and allocation lists.
     """
     deals = Deal.query.all()
     investors = Investor.query.all()
     allocations = Allocation.query.all()
 
-    # Calculate portfolio-wide capital totals
     total_required = sum(float(d.capital_required or 0) for d in deals)
     total_raised = sum(float(d.capital_raised or 0) for d in deals)
 
-    return render_template(
-        "capital/index.html",
-        deals=deals,
-        investors=investors,
-        allocations=allocations,
-        total_required=total_required,
-        total_raised=total_raised,
-    )
+    return jsonify({
+        "total_required": total_required,
+        "total_raised": total_raised,
+        "deals": [d.to_dict() for d in deals],
+        "investors": [i.to_dict() for i in investors],
+        "allocations": [a.to_dict() for a in allocations],
+    })
 
 
-@capital_bp.route("/deals")
-@login_required
-@capital_access_required
+@capital_bp.route("/deals", methods=["GET"])
+@jwt_required
+@role_required(*CAPITAL_ROLES)
 def deals():
-    """List all deals in the pipeline with their key metrics."""
+    """List all deals in the pipeline."""
     deals = Deal.query.all()
-    return render_template("capital/deals.html", deals=deals)
+    return jsonify({"deals": [d.to_dict() for d in deals]})
 
 
-@capital_bp.route("/deals/<int:deal_id>")
-@login_required
-@capital_access_required
+@capital_bp.route("/deals/<int:deal_id>", methods=["GET"])
+@jwt_required
+@role_required(*CAPITAL_ROLES)
 def deal_detail(deal_id):
     """
-    Individual deal room page.
+    Individual deal detail with allocations and available investors.
 
-    Shows detailed deal information, existing allocations, and
-    (for Sponsor Admin) an allocation creation form. This is the
-    "truth room" where investors can see deal-level transparency.
+    Returns the deal, its allocations, and active investors
+    (for the allocation creation form on the frontend).
     """
     deal = Deal.query.get_or_404(deal_id)
     allocations = Allocation.query.filter_by(deal_id=deal_id).all()
-    # Provide active investors for the allocation dropdown (Sponsor Admin)
     investors = Investor.query.filter_by(status="Active").all()
-    return render_template("capital/deal_detail.html", deal=deal, allocations=allocations, investors=investors)
+
+    return jsonify({
+        "deal": deal.to_dict(),
+        "allocations": [a.to_dict() for a in allocations],
+        "investors": [i.to_dict() for i in investors],
+    })
 
 
-@capital_bp.route("/investors")
-@login_required
-@capital_access_required
+@capital_bp.route("/investors", methods=["GET"])
+@jwt_required
+@role_required(*CAPITAL_ROLES)
 def investors():
-    """List all investor profiles with preferences, tier levels, and status."""
+    """List all investor profiles."""
     investors = Investor.query.all()
-    return render_template("capital/investors.html", investors=investors)
+    return jsonify({"investors": [i.to_dict() for i in investors]})
 
 
-@capital_bp.route("/investors/add", methods=["GET", "POST"])
-@login_required
-@capital_access_required
-def add_investor():
+@capital_bp.route("/investors", methods=["POST"])
+@jwt_required
+@role_required("sponsor_admin")
+def create_investor():
     """
-    Add a new investor profile. Sponsor Admin only.
+    Create a new investor profile. Sponsor Admin only.
 
-    GET:  Render the investor creation form with all preference fields.
-    POST: Create the investor record from form data and redirect to listing.
+    Expects JSON body with investor fields:
+        {
+            "name": "Investor Name",
+            "accreditation_status": "Verified",
+            "check_size_min": 500000,
+            ...
+        }
+
+    Returns (201): Created investor object.
+    Returns (400): If name is missing.
     """
-    # Only Sponsor Admin can create new investor profiles
-    if current_user.role != "sponsor_admin":
-        flash("Only Sponsor Admin can add investors.", "error")
-        return redirect(url_for("capital.investors"))
+    data = request.get_json()
+    if not data or not data.get("name"):
+        return jsonify({"error": "Investor name is required"}), 400
 
-    if request.method == "POST":
-        # Build investor from form fields with sensible defaults
-        investor = Investor(
-            name=request.form["name"],
-            accreditation_status=request.form.get("accreditation_status", "Pending"),
-            check_size_min=request.form.get("check_size_min", 0),
-            check_size_max=request.form.get("check_size_max", 0),
-            asset_preference=request.form.get("asset_preference", ""),
-            geography_preference=request.form.get("geography_preference", ""),
-            risk_tolerance=request.form.get("risk_tolerance", ""),
-            structure_preference=request.form.get("structure_preference", ""),
-            timeline_preference=request.form.get("timeline_preference", ""),
-            strategic_interest=request.form.get("strategic_interest", ""),
-            tier_level=request.form.get("tier_level", "Tier 1"),
-            status="Active",
-        )
-        db.session.add(investor)
-        db.session.commit()
-        flash("Investor added successfully.", "success")
-        return redirect(url_for("capital.investors"))
+    investor = Investor(
+        name=data["name"],
+        accreditation_status=data.get("accreditation_status", "Pending"),
+        check_size_min=data.get("check_size_min", 0),
+        check_size_max=data.get("check_size_max", 0),
+        asset_preference=data.get("asset_preference", ""),
+        geography_preference=data.get("geography_preference", ""),
+        risk_tolerance=data.get("risk_tolerance", ""),
+        structure_preference=data.get("structure_preference", ""),
+        timeline_preference=data.get("timeline_preference", ""),
+        strategic_interest=data.get("strategic_interest", ""),
+        tier_level=data.get("tier_level", "Tier 1"),
+        status="Active",
+    )
+    db.session.add(investor)
+    db.session.commit()
 
-    return render_template("capital/add_investor.html")
+    return jsonify({"investor": investor.to_dict()}), 201
 
 
-@capital_bp.route("/allocations/create", methods=["POST"])
-@login_required
-@capital_access_required
+@capital_bp.route("/allocations", methods=["POST"])
+@jwt_required
+@role_required("sponsor_admin")
 def create_allocation():
     """
     Create a new allocation (investor commitment to a deal). Sponsor Admin only.
 
-    Allocations track both soft commits (verbal/preliminary) and hard commits
-    (legally binding). New allocations are created with "Pending" status.
-    Redirects back to the deal detail page after creation.
+    Expects JSON body:
+        {
+            "investor_id": 1,
+            "deal_id": 1,
+            "soft_commit_amount": 500000,
+            "hard_commit_amount": 0,
+            "notes": "Initial commitment"
+        }
+
+    Returns (201): Created allocation object.
+    Returns (400): If investor_id or deal_id is missing.
     """
-    # Only Sponsor Admin can create allocations
-    if current_user.role != "sponsor_admin":
-        flash("Only Sponsor Admin can create allocations.", "error")
-        return redirect(url_for("capital.index"))
+    data = request.get_json()
+    if not data or not data.get("investor_id") or not data.get("deal_id"):
+        return jsonify({"error": "investor_id and deal_id are required"}), 400
 
     allocation = Allocation(
-        investor_id=request.form["investor_id"],
-        deal_id=request.form["deal_id"],
-        soft_commit_amount=request.form.get("soft_commit_amount", 0),
-        hard_commit_amount=request.form.get("hard_commit_amount", 0),
+        investor_id=data["investor_id"],
+        deal_id=data["deal_id"],
+        soft_commit_amount=data.get("soft_commit_amount", 0),
+        hard_commit_amount=data.get("hard_commit_amount", 0),
         status="Pending",
-        notes=request.form.get("notes", ""),
+        notes=data.get("notes", ""),
     )
     db.session.add(allocation)
     db.session.commit()
-    flash("Allocation created successfully.", "success")
-    return redirect(url_for("capital.deal_detail", deal_id=request.form["deal_id"]))
+
+    return jsonify({"allocation": allocation.to_dict()}), 201
 
 
-@capital_bp.route("/matching")
-@login_required
-@capital_access_required
+@capital_bp.route("/matching", methods=["GET"])
+@jwt_required
+@role_required(*CAPITAL_ROLES)
 def matching():
     """
     Rule-based deal-investor matching engine.
 
-    Scores each active investor against each open deal using the following criteria:
+    Scores each active investor against each open deal:
         - Asset type preference match:    +25 points
         - Risk tolerance alignment:       +25 points
         - Check size within range:        +25 points
         - Verified accreditation:         +15 points
         - Tier 2 (priority) investor:     +10 points
 
-    Only matches scoring >= 25 (at least one criterion met) are displayed.
-    Results are sorted by score descending, with Sponsor Admin able to
-    navigate directly to the deal room to create an allocation.
-
-    Note: This is a basic rule-based matching system per the MVP spec.
-    Advanced scoring, tier automation, and cross-portfolio analytics
-    are explicitly deferred per the blueprint's Phase 1 constraints.
+    Only matches scoring >= 25 are returned, sorted by score descending.
     """
-    # Get only active investors and open deals for matching
     investors = Investor.query.filter_by(status="Active").all()
     deals = Deal.query.filter(Deal.status == "Open").all()
 
@@ -250,13 +230,13 @@ def matching():
             # Only include matches with at least one criterion met
             if score >= 25:
                 matches.append({
-                    "investor": investor,
-                    "deal": deal,
-                    "asset": asset,
-                    "score": min(score, 100),  # Cap at 100%
+                    "investor": investor.to_dict(),
+                    "deal": deal.to_dict(),
+                    "asset": asset.to_dict(),
+                    "score": min(score, 100),
                     "reasons": reasons,
                 })
 
-    # Sort by match score descending (strongest matches first)
+    # Sort by match score descending
     matches.sort(key=lambda x: x["score"], reverse=True)
-    return render_template("capital/matching.html", matches=matches)
+    return jsonify({"matches": matches})
