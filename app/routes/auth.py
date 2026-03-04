@@ -31,8 +31,8 @@ def login():
 
     Returns on success (200):
         {
-            "token": "<jwt_access_token>",
-            "user": { ...user profile... }
+            "accessToken": "<jwt_access_token>",
+            "user": { id, username, role, full_name }
         }
 
     Returns on failure (400): If username or password is missing.
@@ -51,7 +51,8 @@ def login():
     if not user or not user.check_password(data["password"]):
         return jsonify({"error": "Invalid username or password"}), 401
 
-    # Create access token with user ID as identity and role as additional claim.
+    # Create access token with user ID (stringified) as identity and role as
+    # additional claim. JWT claims: sub = str(user.id), role = user.role.
     # The role claim allows role_required() to check permissions without a DB lookup.
     access_token = create_access_token(
         identity=str(user.id),
@@ -59,7 +60,7 @@ def login():
     )
 
     return jsonify({
-        "token": access_token,
+        "accessToken": access_token,
         "user": user.to_dict(),
     })
 

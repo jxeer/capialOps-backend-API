@@ -14,7 +14,7 @@ Token flow:
 The access token carries additional claims (role) so the role_required()
 decorator can enforce permissions without an extra DB lookup.
 
-Token identity: user.id (integer)
+Token identity: str(user.id) (stringified integer — PyJWT 2.x requires string subjects)
 Additional claims: { "role": "sponsor_admin" }
 """
 
