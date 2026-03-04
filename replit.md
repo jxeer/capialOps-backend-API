@@ -10,6 +10,7 @@ This is the **API-only backend** (capitalops-api). The React frontend (capitalop
 - **Database**: PostgreSQL (Replit-managed via DATABASE_URL)
 - **Auth**: JWT (PyJWT) — stateless Bearer token authentication
 - **CORS**: Flask-CORS configured for cross-origin React frontend requests
+- **API Versioning**: All routes under `/api/v1/`
 
 ## Project Structure
 ```
@@ -19,15 +20,15 @@ app/
   models.py                     # SQLAlchemy models (10 entities, all with to_dict())
   auth_utils.py                 # JWT token generation, validation, decorators
   routes/
-    auth.py                     # POST /api/auth/login, GET /api/auth/me
-    dashboard.py                # GET /api/dashboard/
-    capital.py                  # Module 1: Capital Engine (/api/capital/*)
-    execution.py                # Module 2: Execution Control (/api/execution/*)
-    vendor.py                   # Module 3: Asset & Vendor Control (/api/vendor/*)
+    auth.py                     # POST /api/v1/auth/login, GET /api/v1/auth/me
+    dashboard.py                # GET /api/v1/dashboard/
+    capital.py                  # Module 1: Capital Engine (/api/v1/capital/*)
+    execution.py                # Module 2: Execution Control (/api/v1/execution/*)
+    vendor.py                   # Module 3: Asset & Vendor Control (/api/v1/vendor/*)
 ```
 
 ## API Authentication
-All routes (except POST /api/auth/login) require a JWT in the Authorization header:
+All routes (except POST /api/v1/auth/login) require a JWT in the Authorization header:
 ```
 Authorization: Bearer <jwt_token>
 ```
@@ -35,26 +36,26 @@ Authorization: Bearer <jwt_token>
 Token payload: `{ user_id, role, exp, iat }`
 Default expiration: 24 hours (configurable via JWT_EXPIRATION_HOURS env var)
 
-## API Route Summary
-- `POST /api/auth/login`       — Authenticate, returns JWT + user profile
-- `GET  /api/auth/me`          — Current user profile (requires JWT)
-- `GET  /api/dashboard/`       — Portfolio overview stats
-- `GET  /api/capital/`         — Capital engine overview
-- `GET  /api/capital/deals`    — Deal pipeline
-- `GET  /api/capital/deals/<id>` — Deal detail + allocations
-- `GET  /api/capital/investors`  — Investor listing
-- `POST /api/capital/investors`  — Create investor (admin)
-- `POST /api/capital/allocations` — Create allocation (admin)
-- `GET  /api/capital/matching`   — Deal-investor matching
-- `GET  /api/execution/`        — Project overview with metrics
-- `GET  /api/execution/projects/<id>` — Project detail + milestones
-- `PATCH /api/execution/milestones/<id>` — Update milestone
-- `GET  /api/execution/governance` — Governance event log
-- `GET  /api/vendor/`           — Vendor overview + stats
-- `POST /api/vendor/`           — Register vendor (admin)
-- `GET  /api/vendor/work-orders` — Work order listing
-- `POST /api/vendor/work-orders` — Create work order
-- `PATCH /api/vendor/work-orders/<id>` — Update work order
+## API Route Summary (v1)
+- `POST /api/v1/auth/login`       — Authenticate, returns JWT + user profile
+- `GET  /api/v1/auth/me`          — Current user profile (requires JWT)
+- `GET  /api/v1/dashboard/`       — Portfolio overview stats
+- `GET  /api/v1/capital/`         — Capital engine overview
+- `GET  /api/v1/capital/deals`    — Deal pipeline
+- `GET  /api/v1/capital/deals/<id>` — Deal detail + allocations
+- `GET  /api/v1/capital/investors`  — Investor listing
+- `POST /api/v1/capital/investors`  — Create investor (admin)
+- `POST /api/v1/capital/allocations` — Create allocation (admin)
+- `GET  /api/v1/capital/matching`   — Deal-investor matching
+- `GET  /api/v1/execution/`        — Project overview with metrics
+- `GET  /api/v1/execution/projects/<id>` — Project detail + milestones
+- `PATCH /api/v1/execution/milestones/<id>` — Update milestone
+- `GET  /api/v1/execution/governance` — Governance event log
+- `GET  /api/v1/vendor/`           — Vendor overview + stats
+- `POST /api/v1/vendor/`           — Register vendor (admin)
+- `GET  /api/v1/vendor/work-orders` — Work order listing
+- `POST /api/v1/vendor/work-orders` — Create work order
+- `PATCH /api/v1/vendor/work-orders/<id>` — Update work order
 
 ## Data Model (10 Core Entities)
 All models have a `to_dict()` method for JSON serialization.

@@ -80,7 +80,7 @@ def create_app():
     }})
 
     # --- Register Blueprints ---
-    # All routes are under the /api prefix and return JSON.
+    # All routes are versioned under /api/v1/ and return JSON only.
 
     from app.routes.auth import auth_bp
     from app.routes.dashboard import dashboard_bp
@@ -88,11 +88,11 @@ def create_app():
     from app.routes.execution import execution_bp
     from app.routes.vendor import vendor_bp
 
-    app.register_blueprint(auth_bp, url_prefix="/api/auth")
-    app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
-    app.register_blueprint(capital_bp, url_prefix="/api/capital")
-    app.register_blueprint(execution_bp, url_prefix="/api/execution")
-    app.register_blueprint(vendor_bp, url_prefix="/api/vendor")
+    app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
+    app.register_blueprint(dashboard_bp, url_prefix="/api/v1/dashboard")
+    app.register_blueprint(capital_bp, url_prefix="/api/v1/capital")
+    app.register_blueprint(execution_bp, url_prefix="/api/v1/execution")
+    app.register_blueprint(vendor_bp, url_prefix="/api/v1/vendor")
 
     # --- Database Initialization ---
     with app.app_context():
