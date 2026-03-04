@@ -1,5 +1,5 @@
 entrypoint = "main.py"
-modules = ["python-3.11"]
+modules = ["python-3.11", "nodejs-20"]
 
 [nix]
 channel = "stable-25_05"
@@ -29,17 +29,37 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "API Server"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vite --config client/vite.config.ts"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "API Server"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
-waitForPort = 5000
+waitForPort = 3001
 
-[workflows.workflow.metadata]
-outputType = "webview"
+[[ports]]
+localPort = 3001
+externalPort = 3001
 
 [[ports]]
 localPort = 5000

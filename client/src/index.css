@@ -1,0 +1,210 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  background: #f5f7fa;
+  color: #1a1a2e;
+  line-height: 1.6;
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-card h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.login-card p.subtitle {
+  color: #666;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: #333;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  transition: border-color 0.15s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4a6cf7;
+  box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.1);
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 0.7rem;
+  background: #4a6cf7;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 0.5rem;
+}
+
+.btn-primary:hover {
+  background: #3a5ce5;
+}
+
+.btn-primary:disabled {
+  background: #a0b4f7;
+  cursor: not-allowed;
+}
+
+.error-msg {
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.dashboard {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.dashboard header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.dashboard header h1 {
+  font-size: 1.5rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-info span {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.btn-logout {
+  padding: 0.4rem 0.8rem;
+  background: transparent;
+  color: #dc2626;
+  border: 1px solid #dc2626;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-logout:hover {
+  background: #dc2626;
+  color: #fff;
+}
+
+.projects-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.projects-table th,
+.projects-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.projects-table thead {
+  background: #f8f9fb;
+}
+
+.projects-table th {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #666;
+}
+
+.projects-table tbody tr {
+  border-top: 1px solid #f0f0f0;
+}
+
+.projects-table tbody tr:hover {
+  background: #fafbfc;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-badge.on-track {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.status-badge.at-risk {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.status-badge.complete {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: #888;
+  font-size: 0.95rem;
+}
