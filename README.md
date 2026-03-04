@@ -1,184 +1,56 @@
-# CAPITALOPS API
+# CapitalOps
 
-**Capital + Governance Operating Layer — Built on Coral8**
+**Capital + Governance Operating Layer for Real Estate Development**
 
-CapitalOps API is a pure JSON API backend for real estate development capital and governance operations. It handles investor alignment, deal distribution, governance interpretation, vendor and maintenance visibility, and structured reporting.
+CapitalOps is a full-stack application that handles investor alignment, deal distribution, governance interpretation, vendor/maintenance visibility, and structured reporting for real estate development portfolios.
 
-This is the **API backend** (`capitalops-api`). The React/TypeScript frontend (`capitalops-web`) is a separate project that communicates with this API via `Authorization: Bearer <JWT>`.
-
----
-
-## Architecture
-
-```
-capitalops-api (this repo)          capitalops-web (separate repo)
-┌───────────────────────┐           ┌───────────────────────┐
-│  Flask JSON API       │◄──JWT───►│  React + TypeScript   │
-│  PostgreSQL + SQLAlchemy│          │  Vite                 │
-│  JWT Auth             │           │  Bearer Token Auth    │
-└───────────────────────┘           └───────────────────────┘
-```
-
-Three modules reflect how operational data flows upward into investor-grade transparency:
-
-```
-Module 3: Asset & Vendor Control (/api/vendor)
-         ↓
-Module 2: Execution Control (/api/execution)
-         ↓
-Module 1: Capital Engine (/api/capital)
-```
-
-**Operational truth → Governance interpretation → Investor transparency**
+Both the API backend and the React frontend run in a single Repl.
 
 ---
 
-## Authentication
+## Quick Start
 
-All API routes (except login) require a JWT in the Authorization header:
+### 1. Environment Variables
 
-```
-POST /api/auth/login
-Content-Type: application/json
+The following environment variables must be set before booting. In Replit, add them via the Secrets panel.
 
-{"username": "admin", "password": "admin123"}
-```
+#### Required
 
-Response:
-```json
-{
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "user": {
-        "id": 1,
-        "username": "admin",
-        "role": "sponsor_admin",
-        "role_display": "Sponsor Admin",
-        ...
-    }
-}
-```
-
-Use the token on all subsequent requests:
-```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
-```
-
----
-
-## API Endpoints
-
-### Auth
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/auth/login` | Authenticate, receive JWT |
-| GET | `/api/auth/me` | Current user profile |
-
-### Dashboard
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/dashboard/` | Portfolio overview stats |
-
-### Module 1: Capital Engine
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/capital/` | Capital overview (stats + lists) |
-| GET | `/api/capital/deals` | Deal pipeline |
-| GET | `/api/capital/deals/:id` | Deal detail + allocations |
-| GET | `/api/capital/investors` | Investor listing |
-| POST | `/api/capital/investors` | Create investor (admin) |
-| POST | `/api/capital/allocations` | Create allocation (admin) |
-| GET | `/api/capital/matching` | Deal-investor matching engine |
-
-### Module 2: Execution Control
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/execution/` | All projects with metrics |
-| GET | `/api/execution/projects/:id` | Project detail + milestones |
-| PATCH | `/api/execution/milestones/:id` | Update milestone |
-| GET | `/api/execution/governance` | Governance event log |
-
-### Module 3: Asset & Vendor Control
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/vendor/` | Vendor overview + stats |
-| POST | `/api/vendor/` | Register vendor (admin) |
-| GET | `/api/vendor/work-orders` | Work order listing |
-| POST | `/api/vendor/work-orders` | Create work order |
-| PATCH | `/api/vendor/work-orders/:id` | Update work order |
-
----
-
-## Role-Based Access Control
-
-Permissions are enforced at the route level via JWT role claims:
-
-| Role | Access |
+| Variable | Description |
 |---|---|
-| **Sponsor Admin** | Full access to all three modules |
-| **Project Manager** | Execution module only |
-| **General Contractor** | Confirm milestones, limited vendor access |
-| **Vendor** | Own work orders only |
-| **Investor (Tier 1)** | View matched deals, submit allocations |
-| **Priority Investor (Tier 2)** | Early access, enhanced reporting |
+| `DATABASE_URL` | PostgreSQL connection string (provided automatically by Replit's PostgreSQL add-on) |
 
----
+#### Optional (API)
 
-## Data Model
+| Variable | Default | Description |
+|---|---|---|
+| `JWT_SECRET_KEY` | dev fallback key | Secret used to sign JWT access tokens. **Required in production — set a strong random value.** Falls back to `SECRET_KEY` env var if `JWT_SECRET_KEY` is not set. |
+| `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` | `60` | Access token lifetime in minutes |
+| `FRONTEND_ORIGIN` | `http://localhost:5173,http://localhost:3000` | Comma-separated origins allowed by CORS. Set to your deployed frontend URL in production. |
+| `FLASK_ENV` | _(unset)_ | Set to `development` to enable auto-seeding of demo data on startup. Set to `production` to block auto-seeding even if Replit env vars are present. |
 
-10 core entities, all with `to_dict()` serialization and `portfolio_id` for multi-portfolio scaling:
+#### Optional (Frontend)
 
-| Entity | Purpose |
-|---|---|
-| **User** | JWT auth with role-based access |
-| **Portfolio** | Top-level grouping for all assets and projects |
-| **Asset** | Real estate properties |
-| **Project** | Development projects linked to assets |
-| **Deal** | Capital raise structures per project |
-| **Investor** | Investor profiles with preferences |
-| **Allocation** | Investor commitments to deals |
-| **Milestone** | Project milestones with risk flags |
-| **Vendor** | Contractors and service providers |
-| **WorkOrder** | Vendor work assignments with CapEx/OpEx classification |
-| **RiskFlag** | Category-based risk tracking |
+| Variable | Default | Description |
+|---|---|---|
+| `VITE_API_BASE_URL` | `/api/v1` | Base URL for all API calls from the frontend. In this Repl, Vite proxies `/api` to the Flask backend, so the default works out of the box. If deploying the frontend separately, set this to the full API URL (e.g., `https://your-api.replit.app/api/v1`). |
 
----
+### 2. Boot the App
 
-## Tech Stack
+The Repl runs two workflows automatically:
 
-- **Backend**: Python / Flask
-- **ORM**: SQLAlchemy
-- **Database**: PostgreSQL
-- **Auth**: PyJWT (stateless Bearer tokens)
-- **CORS**: Flask-CORS (for React frontend cross-origin requests)
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.11+
-- PostgreSQL database
-- `DATABASE_URL` environment variable set
-
-### Running the API
-
-```bash
-python main.py
-```
-
-The API starts on `http://0.0.0.0:5000`.
-
-### Environment Variables
-
-| Variable | Required | Default | Description |
+| Workflow | Command | Port | Purpose |
 |---|---|---|---|
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `SECRET_KEY` | No | dev key | JWT signing key |
-| `JWT_EXPIRATION_HOURS` | No | 24 | Token expiration in hours |
-| `CORS_ORIGINS` | No | * | Comma-separated allowed origins |
+| **Start application** | `npx vite --config client/vite.config.ts` | 5000 | React frontend (webview) |
+| **API Server** | `python main.py` | 3001 | Flask JSON API |
 
-### Demo Accounts
+Vite proxies all `/api` requests from the frontend to the Flask backend on port 3001. No extra configuration needed.
+
+Both workflows start automatically when the Repl boots. The webview shows the frontend on port 5000.
+
+### 3. Log In
+
+Once both workflows are running, open the webview. You'll see the login page.
 
 | Role | Username | Password |
 |---|---|---|
@@ -186,20 +58,155 @@ The API starts on `http://0.0.0.0:5000`.
 | Project Manager | `pm` | `pm123` |
 | General Contractor | `gc` | `gc123` |
 
+Log in with any account to see the project dashboard.
+
+### 4. Seed Demo Data
+
+Demo data (users, projects, deals, milestones, vendors) is seeded automatically on startup in development environments (`FLASK_ENV=development` or Replit dev workspace).
+
+To seed manually:
+```bash
+FLASK_APP=main.py flask seed
+```
+
+Seeding is idempotent — it skips if users already exist. It never runs when `FLASK_ENV=production`.
+
+---
+
+## Architecture
+
+```
+Browser
+  │
+  ▼
+┌──────────────────────────────────┐
+│  capitalops-web (port 5000)      │
+│  React + TypeScript + Vite       │
+│  All API calls → VITE_API_BASE_URL│
+└──────────┬───────────────────────┘
+           │  Vite proxy: /api → localhost:3001
+           ▼
+┌──────────────────────────────────┐
+│  capitalops-api (port 3001)      │
+│  Flask JSON API                  │
+│  PostgreSQL + SQLAlchemy         │
+│  JWT Auth (flask-jwt-extended)   │
+└──────────┬───────────────────────┘
+           │  (future)
+           ▼
+┌──────────────────────────────────┐
+│  Coral8 Execution Backbone       │
+│  (not yet wired)                 │
+└──────────────────────────────────┘
+```
+
+**Architectural rule:** The React frontend only calls the CapitalOps API. The API is the gateway that will later call Coral8. The frontend never calls Coral8 directly.
+
+---
+
+## API Endpoints (v1)
+
+All routes are under `/api/v1/`. All routes except login require a JWT:
+
+```
+Authorization: Bearer <access_token>
+```
+
+### Auth
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/v1/auth/login` | Authenticate, returns `{ accessToken, user }` |
+| GET | `/api/v1/auth/me` | Current user profile |
+
+### Dashboard
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/dashboard/` | Portfolio overview stats |
+
+### Module 1: Capital Engine
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/capital/` | Capital overview (stats + lists) |
+| GET | `/api/v1/capital/deals` | Deal pipeline |
+| GET | `/api/v1/capital/deals/:id` | Deal detail + allocations |
+| GET | `/api/v1/capital/investors` | Investor listing |
+| POST | `/api/v1/capital/investors` | Create investor (admin only) |
+| POST | `/api/v1/capital/allocations` | Create allocation (admin only) |
+| GET | `/api/v1/capital/matching` | Deal-investor matching engine |
+
+### Module 2: Execution Control
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/execution/` | All projects with metrics |
+| GET | `/api/v1/execution/projects/:id` | Project detail + milestones |
+| PATCH | `/api/v1/execution/milestones/:id` | Update milestone |
+| GET | `/api/v1/execution/governance` | Governance event log |
+
+### Module 3: Asset & Vendor Control
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/vendor/` | Vendor overview + stats |
+| POST | `/api/v1/vendor/` | Register vendor (admin only) |
+| GET | `/api/v1/vendor/work-orders` | Work order listing |
+| POST | `/api/v1/vendor/work-orders` | Create work order |
+| PATCH | `/api/v1/vendor/work-orders/:id` | Update work order |
+
+---
+
+## Role-Based Access Control
+
+Permissions are enforced via JWT role claims (no extra DB lookup):
+
+| Role | Access |
+|---|---|
+| **Sponsor Admin** | Full access to all three modules |
+| **Project Manager** | Execution module only |
+| **General Contractor** | Confirm milestones, limited vendor access |
+| **Vendor** | Own work orders only |
+| **Investor Tier 1** | View matched deals, submit allocations |
+| **Investor Tier 2** | Priority access, enhanced reporting |
+
 ---
 
 ## Project Structure
 
 ```
-main.py                       Entry point
+main.py                          Flask API entry point (port 3001)
 app/
-  __init__.py                 App factory, DB init, CORS, seed data
-  models.py                  SQLAlchemy models (10 entities, all serializable)
-  auth_utils.py              JWT generation, validation, route decorators
+  __init__.py                    App factory, JWT, CORS, DB init, seed data
+  models.py                     SQLAlchemy models (11 entities)
+  auth_utils.py                 get_current_user(), role_required()
   routes/
-    auth.py                  Login + current user
-    dashboard.py             Portfolio overview
-    capital.py               Module 1: Capital Engine
-    execution.py             Module 2: Execution Control
-    vendor.py                Module 3: Asset & Vendor Control
+    auth.py                     Login + current user
+    dashboard.py                Portfolio overview
+    capital.py                  Module 1: Capital Engine
+    execution.py                Module 2: Execution Control
+    vendor.py                   Module 3: Asset & Vendor Control
+client/
+  vite.config.ts                Vite dev server (port 5000, proxy → 3001)
+  index.html                    HTML entry point
+  .env                          VITE_API_BASE_URL=/api/v1
+  src/
+    main.tsx                    React entry point
+    App.tsx                     Router (/login, /dashboard)
+    lib/api.ts                  API client (token storage, auth header)
+    components/ProtectedRoute.tsx  Redirects to /login if no token
+    pages/LoginPage.tsx         Login form
+    pages/DashboardPage.tsx     Project table with metrics
 ```
+
+---
+
+## Tech Stack
+
+### Backend
+- Python 3.11 / Flask
+- SQLAlchemy + PostgreSQL
+- flask-jwt-extended (stateless JWT auth)
+- Flask-CORS
+- Werkzeug (password hashing)
+
+### Frontend
+- React 18 + TypeScript
+- Vite
+- React Router
