@@ -85,10 +85,15 @@ def create_app():
     db.init_app(app)
     jwt.init_app(app)
 
-    # Enable CORS for the React frontend.
-    # In production, restrict origins to the capitalops-web domain.
+    # Enable CORS for the capitalops-web React frontend.
+    # FRONTEND_ORIGIN controls which origin(s) are allowed.
+    # In dev: defaults to localhost:5173 (Vite) and localhost:3000 (CRA).
+    # In production: set FRONTEND_ORIGIN to the deployed capitalops-web URL.
+    frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173,http://localhost:3000")
+    allowed_origins = [o.strip() for o in frontend_origin.split(",") if o.strip()]
+
     CORS(app, resources={r"/api/*": {
-        "origins": os.environ.get("CORS_ORIGINS", "*").split(","),
+        "origins": allowed_origins,
         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
@@ -116,6 +121,29 @@ def create_app():
     def revoked_token_callback(jwt_header, jwt_payload):
         """Return 401 when the token has been revoked."""
         return jsonify({"error": "Token has been revoked"}), 401
+
+    # --- Global HTTP Error Handlers ---
+    # Ensure all error responses are JSON (never HTML) for API consumers
+
+    @app.errorhandler(403)
+    def forbidden_handler(error):
+        """Return 403 JSON when access is denied (role/permission failure)."""
+        return jsonify({"error": "Forbidden"}), 403
+
+    @app.errorhandler(404)
+    def not_found_handler(error):
+        """Return 404 JSON when a resource or route is not found."""
+        return jsonify({"error": "Not found"}), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed_handler(error):
+        """Return 405 JSON when the HTTP method is not allowed on a route."""
+        return jsonify({"error": "Method not allowed"}), 405
+
+    @app.errorhandler(500)
+    def internal_error_handler(error):
+        """Return 500 JSON on unhandled server errors."""
+        return jsonify({"error": "Internal server error"}), 500
 
     # --- Register Blueprints ---
     # All routes are versioned under /api/v1/ and return JSON only.

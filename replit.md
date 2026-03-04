@@ -98,7 +98,7 @@ Operational truth → Governance interpretation → Investor transparency
 - `DATABASE_URL` — PostgreSQL connection string (required)
 - `JWT_SECRET_KEY` — JWT signing key (falls back to SECRET_KEY, then dev default)
 - `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` — Token expiration in minutes (default: 60)
-- `CORS_ORIGINS` — Comma-separated allowed origins (default: *)
+- `FRONTEND_ORIGIN` — Comma-separated allowed origins for CORS (default: `http://localhost:5173,http://localhost:3000`)
 
 ## Commenting Convention
 All Python source files maintain comprehensive docstrings and inline comments.
