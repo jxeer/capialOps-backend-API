@@ -64,3 +64,8 @@ externalPort = 3001
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+FRONTEND_ORIGIN = "https://capital-ops-gui.replit.app"
