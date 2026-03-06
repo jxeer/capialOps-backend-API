@@ -1,0 +1,384 @@
+CODENAME: CAPITALOPS
+Operational Blueprint
+Layered on Coral8
+1. SYSTEM INTENT
+CapitalOps is not a standalone platform.
+It is:
+A capital + governance operating layer built on top of Coral8’s execution backbone.
+Coral8 handles:
+● Task tracking
+● Workflow
+● Internal documentation
+● Execution data capture
+CapitalOps handles:
+● Investor alignment
+● Deal distribution
+● Governance interpretation
+● Vendor & maintenance visibility
+● Structured reporting
+That separation must remain clean.
+2. SYSTEM ARCHITECTURE (3 Modules)
+Module 1: Capital Engine
+Purpose:
+Curated deal distribution and investor transparency.
+Core Capabilities:
+● Investor profile management
+● Deal tagging
+● Rule-based matching
+● Sponsor-approved distribution
+● Engagement tracking
+● Allocation tracking
+● Investor transparency dashboard
+Module 2: Execution Control
+Purpose:
+Translate raw Coral8 data into governance-level clarity.
+Core Capabilities:
+● Milestone rollups
+● Budget vs actual summary
+● Risk flag triggers
+● Delay explanations
+● Variance reporting
+● Governance event log
+Module 3: Asset & Vendor Control
+Purpose:
+Operational discipline and asset protection.
+Core Capabilities:
+● Vendor login portal
+● Invoice uploads
+● COI upload
+● Work order tracking
+● Change order submission
+● Maintenance tracking
+● Asset health rollups
+3. DATA MODEL SPECIFICATION (Julian Must Lock This First)
+Everything revolves around 7 primary entities.
+If this schema is sloppy, the system collapses later.
+Core Entities
+1. Asset
+Fields:
+● AssetID
+● Name
+● Location
+● AssetType
+● SquareFootage
+● Status (Pre-dev, Active, Stabilized)
+● AssetManager
+2. Project
+Fields:
+● ProjectID
+● AssetID (FK)
+● Phase
+● StartDate
+● TargetCompletion
+● BudgetTotal
+● BudgetActual
+● Status
+● PMAssigned
+3. Deal
+Fields:
+● DealID
+● ProjectID (FK)
+● CapitalRequired
+● CapitalRaised
+● ReturnProfile
+● Duration
+● RiskLevel
+● Complexity
+● Phase
+● Status
+4. Investor
+Fields:
+● InvestorID
+● Name
+● AccreditationStatus
+● CheckSizeMin
+● CheckSizeMax
+● AssetPreference
+● GeographyPreference
+● RiskTolerance
+● StructurePreference
+● TimelinePreference
+● StrategicInterest
+● TierLevel
+● Status
+5. Allocation
+Fields:
+● AllocationID
+● InvestorID (FK)
+● DealID (FK)
+● SoftCommitAmount
+● HardCommitAmount
+● Status
+● Timestamp
+● Notes
+6. Milestone
+Fields:
+● MilestoneID
+● ProjectID (FK)
+● Name
+● Category
+● TargetDate
+● CompletionDate
+● Status
+● DelayExplanation
+● RiskFlag (Y/N)
+7. Vendor
+Fields:
+● VendorID
+● AssetID (FK)
+● Type
+● COIStatus
+● SLAType
+● PerformanceScore
+8. WorkOrder
+Fields:
+● WorkOrderID
+● VendorID (FK)
+● AssetID (FK)
+● Type
+● Priority
+● Cost
+● CapExFlag
+● Status
+● CompletionDate
+● PhotoURL
+This is enough for our MVP.
+We should not expand beyond this.
+4. ROLE & PERMISSION STRUCTURE
+Implement strict role separation.
+Roles
+Sponsor Admin
+● Full access
+● Can create deals
+● Approve investor distribution
+● See all modules
+Project Manager
+● Update milestones
+● Log delay explanations
+● View execution dashboard
+● Cannot alter capital engine
+General Contractor
+● Confirm milestone completion
+● Submit change orders
+● Upload documentation
+● No investor visibility
+Vendor
+● Upload invoices
+● Submit work completion
+● View own work orders only
+Investor (Tier 1)
+● View matched deals
+● Access deal truth room
+● View governance summaries
+● Submit allocation request
+Priority Investor (Tier 2)
+● Early access
+● Structured allocation input
+● Enhanced reporting view
+Permissions must be enforced at database level, not just UI.
+5. SYSTEM FLOW (Data Movement)
+Module 3 (Vendor + Maintenance)
+⬇
+Module 2 (Execution Control)
+⬇
+Module 1 (Capital Engine)
+Operational truth
+→ Governance interpretation
+→ Investor transparency
+No direct vendor → investor view.
+Everything must flow upward.
+6. MVP BUILD PLAN (30–60 DAY EXECUTION)
+We compress intelligently.
+Phase 1 (Days 1–15)
+Lock Schema
+Integrate Coral8 API
+Build:
+● Investor profile UI
+● Deal tagging UI
+● Basic matching logic
+● Sponsor console
+● Basic project dashboard
+Deliverable:
+Internal working prototype for 1 live project.
+Phase 2 (Days 16–30)
+Build:
+● Risk flag logic
+● Milestone auto-progress calculation
+● Budget variance rollups
+● Governance log
+● Investor-facing view toggle
+● Soft commit tracking
+Deliverable:
+Investor demo ready.
+Phase 3 (Days 31–60)
+Build:
+● Vendor portal login
+● Invoice upload
+● Work order system
+● SLA tagging
+● Asset health rollups
+● Maintenance dashboard
+Deliverable:
+Full internal operational control system.
+7. WHAT SHOULD NOT BE BUILT
+● Full accounting engine
+● Full property management system
+● AI recommendation engine
+● Marketplace functionality
+● Public deal directory
+● Tokenization
+● CRM replacement
+Scope discipline is survival.
+8. MVP SUCCESS METRICS
+We know it works when:
+● Investor conversations are shorter
+● Allocation happens faster
+● PM explanations are structured
+● Vendor discipline improves
+● No milestone drifts silently
+● You stop chasing capital, and start selecting it
+9. FUNDING POSITIONING
+CapitalOps is not a speculative SaaS.
+It is:
+Infrastructure supporting active real estate development.
+Funding narrative:
+● Reduces capital raise friction
+● Increases execution discipline
+● Protects downside risk
+● Improves repeat capital probability
+● Scales across pipeline
+You are not selling software.
+You are building capital infrastructure.
+CAPITALOPS
+Phase 1 Architecture: 3 Projects, Scalable to 10+
+Built on Coral8
+Lean but expandable
+I. DESIGN PRINCIPLE
+Build for:
+• 3 concurrent active projects
+• 1 portfolio
+• 1 sponsor entity
+• 20–50 investors
+• 10–30 vendors
+But structure database as if 10+ is coming.
+Meaning:
+Multi-project aware
+Not multi-tenant yet
+No overengineering
+II. SYSTEM STRUCTURE (Lean but Expandable)
+Hierarchy:
+Portfolio (1)
+└ Asset
+└ Project (3 max active initially)
+└ Deal
+└ Allocation
+Everything gets a PortfolioID.
+Even if only one exists.
+That prevents rewrite later.
+III. WHAT TO BUILD NOW
+Core Entities (Lean Version)
+Portfolio
+Asset
+Project
+Deal
+Investor
+Allocation
+Milestone
+Vendor
+WorkOrder
+RiskFlag
+That’s it.
+Do not add CapitalLedger yet.
+Do not build portfolio heatmaps yet.
+Do not build cross-asset vendor scoring yet.
+Add placeholders only.
+IV. MODULE STRUCTURE (PHASE 1)
+Module 1: Capital Engine (Lean)
+Must support:
+• Investor profiles
+• Deal tagging
+• Matching logic
+• Sponsor-approved distribution
+• Allocation tracking
+• Investor transparency dashboard
+But:
+No tier automation yet.
+No advanced scoring yet.
+No cross-portfolio analytics yet.
+Just structured alignment.
+Module 2: Execution Control (Lean)
+Pull from Coral8.
+Must show:
+• Milestone progress
+• Budget vs actual
+• Risk flags
+• Delay explanations
+• Draw status
+Standardized milestone categories from day one.
+Even if you only have 3 projects.
+This is key.
+Module 3: Asset & Vendor Control (Lean)
+Must support:
+• Vendor login
+• Invoice upload
+• COI upload
+• Work order tracking
+• CapEx vs OpEx classification
+• Basic SLA tagging
+Do not build:
+Vendor scoring engine yet.
+Portfolio vendor comparison yet.
+V. BUILD FOR SCALE (BUT HIDE FOR NOW)
+Should be done:
+• Include PortfolioID in all tables
+• Include ProjectID foreign keys everywhere
+• Include role-based permission structure
+• Structure risk flags as category-based, not custom per project
+This allows:
+Scaling to 10 projects later without schema rewrite.
+VI. IMPLEMENTATION ROADMAP (REALISTIC)
+Phase 1 (0–30 Days)
+Build:
+• Multi-project aware schema
+• Investor profile + matching
+• Deal truth room
+• Execution dashboard
+• Vendor upload portal
+• Risk flag logic
+• Role permissions
+Support 3 live projects fully.
+Phase 2 (30–60 Days)
+Enhance:
+• Portfolio summary dashboard
+• Cross-project capital summary
+• Basic vendor performance rollup
+• Allocation history tracking
+Still lean.
+Still controlled.
+Phase 3 (60–90 Days)
+Optional scale layer:
+• Priority tier automation
+• Allocation scoring logic
+• Portfolio risk heatmap
+• Cross-project vendor analytics
+Only if needed.
+VII. WHY THIS APPROACH IS CORRECT
+If you build for 10+ today:
+You stall.
+You overbuild.
+You introduce complexity you won’t use.
+If you build for 3 but architect for 10:
+You move.
+You launch.
+You generate credibility.
+You iterate intelligently.
+This is disciplined scaling.
+VIII. WHAT YOU MUST DECIDE NOW
+Questions:
+1. Will Coral8 remain the single source of execution truth?
+If yes, CapitalOps reads, not duplicates.
+2. Are you storing documents in Coral8 or separate storage?
+3. Will investors log into CapitalOps directly or receive static view links initially?
+4. Are you using 506(b) or 506(c) structures for offerings?
+That affects distribution logic.
+These questions should be Answered before the build.

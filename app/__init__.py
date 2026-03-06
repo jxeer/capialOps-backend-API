@@ -161,12 +161,18 @@ def create_app():
     from app.routes.capital import capital_bp
     from app.routes.execution import execution_bp
     from app.routes.vendor import vendor_bp
+    from app.routes.compat import compat_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
     app.register_blueprint(dashboard_bp, url_prefix="/api/v1/dashboard")
     app.register_blueprint(capital_bp, url_prefix="/api/v1/capital")
     app.register_blueprint(execution_bp, url_prefix="/api/v1/execution")
     app.register_blueprint(vendor_bp, url_prefix="/api/v1/vendor")
+
+    # GUI compatibility layer — serves flat REST endpoints at /api/ matching
+    # the response format expected by the frontend GUI's Express proxy.
+    # No JWT required (server-to-server calls from the GUI's Express server).
+    app.register_blueprint(compat_bp, url_prefix="/api")
 
     # --- Database Initialization ---
     with app.app_context():
@@ -223,7 +229,7 @@ def seed_demo_data():
 
     Skips seeding if any users already exist (idempotent).
     """
-    from app.models import User, Portfolio, Asset, Project, Deal, Investor, Milestone, Vendor
+    from app.models import User, Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag
 
     # Guard: Only seed if the database is empty (no existing users)
     if User.query.first():
@@ -307,7 +313,7 @@ def seed_demo_data():
 
     from datetime import date
 
-    # Project 1: Active construction, on track
+    # Project 1: Active construction, in progress
     project1 = Project(
         asset_id=asset1.id,
         portfolio_id=portfolio.id,
@@ -316,10 +322,10 @@ def seed_demo_data():
         target_completion=date(2026, 12, 31),
         budget_total=28500000,
         budget_actual=12400000,
-        status="On Track",
+        status="In Progress",
         pm_assigned="Sarah Chen",
     )
-    # Project 2: Early-stage pre-development
+    # Project 2: Early-stage pre-development, planning
     project2 = Project(
         asset_id=asset2.id,
         portfolio_id=portfolio.id,
@@ -328,10 +334,10 @@ def seed_demo_data():
         target_completion=date(2027, 6, 30),
         budget_total=18200000,
         budget_actual=1850000,
-        status="On Track",
+        status="Planning",
         pm_assigned="Sarah Chen",
     )
-    # Project 3: Stabilization phase, flagged as at risk
+    # Project 3: Stabilization phase, on hold pending resolution
     project3 = Project(
         asset_id=asset3.id,
         portfolio_id=portfolio.id,
@@ -340,7 +346,7 @@ def seed_demo_data():
         target_completion=date(2026, 6, 30),
         budget_total=14800000,
         budget_actual=13200000,
-        status="At Risk",
+        status="On Hold",
         pm_assigned="Mike Torres",
     )
     db.session.add_all([project1, project2, project3])
@@ -358,11 +364,11 @@ def seed_demo_data():
         return_profile="18-22% IRR",
         duration="36 months",
         risk_level="Medium",
-        complexity="High",
-        phase="Active Raise",
-        status="Open",
+        complexity="Complex",
+        phase="Fundraising",
+        status="Active",
     )
-    # Deal 2: Early stage raise, 25% funded
+    # Deal 2: Early stage raise, draft
     deal2 = Deal(
         project_id=project2.id,
         portfolio_id=portfolio.id,
@@ -370,12 +376,12 @@ def seed_demo_data():
         capital_raised=4500000,
         return_profile="15-18% IRR",
         duration="48 months",
-        risk_level="Medium-High",
-        complexity="Medium",
-        phase="Early Stage",
-        status="Open",
+        risk_level="High",
+        complexity="Moderate",
+        phase="Pre-Marketing",
+        status="Draft",
     )
-    # Deal 3: Fully allocated and closed
+    # Deal 3: Fully funded
     deal3 = Deal(
         project_id=project3.id,
         portfolio_id=portfolio.id,
@@ -384,9 +390,9 @@ def seed_demo_data():
         return_profile="12-15% IRR",
         duration="24 months",
         risk_level="Low",
-        complexity="Low",
-        phase="Fully Allocated",
-        status="Closed",
+        complexity="Simple",
+        phase="Closed",
+        status="Funded",
     )
     db.session.add_all([deal1, deal2, deal3])
     db.session.flush()  # Flush to generate deal IDs
@@ -396,11 +402,11 @@ def seed_demo_data():
     # These are used by the deal-investor matching engine in Module 1.
 
     investors = [
-        Investor(name="Westfield Capital Partners", accreditation_status="Verified", check_size_min=500000, check_size_max=5000000, asset_preference="Multifamily", geography_preference="Sunbelt", risk_tolerance="Medium", structure_preference="LP Equity", timeline_preference="3-5 years", strategic_interest="Value-Add", tier_level="Tier 1", status="Active"),
-        Investor(name="Horizon Family Office", accreditation_status="Verified", check_size_min=1000000, check_size_max=10000000, asset_preference="Mixed-Use", geography_preference="Top 25 MSA", risk_tolerance="Low-Medium", structure_preference="Preferred Equity", timeline_preference="5-7 years", strategic_interest="Core-Plus", tier_level="Tier 2", status="Active"),
-        Investor(name="Apex Growth Fund", accreditation_status="Verified", check_size_min=250000, check_size_max=2000000, asset_preference="Commercial", geography_preference="Southeast", risk_tolerance="Medium-High", structure_preference="LP Equity", timeline_preference="2-4 years", strategic_interest="Opportunistic", tier_level="Tier 1", status="Active"),
-        Investor(name="Sterling Ventures", accreditation_status="Pending", check_size_min=100000, check_size_max=1000000, asset_preference="Multifamily", geography_preference="Texas", risk_tolerance="Low", structure_preference="Debt", timeline_preference="1-3 years", strategic_interest="Income", tier_level="Tier 1", status="Pending"),
-        Investor(name="Cascade Investment Group", accreditation_status="Verified", check_size_min=2000000, check_size_max=15000000, asset_preference="All", geography_preference="National", risk_tolerance="Medium", structure_preference="LP Equity", timeline_preference="3-7 years", strategic_interest="Value-Add", tier_level="Tier 2", status="Active"),
+        Investor(name="Westfield Capital Partners", accreditation_status="Qualified Purchaser", check_size_min=500000, check_size_max=5000000, asset_preference="Multifamily", geography_preference="Sun Belt", risk_tolerance="Moderate", structure_preference="LP Equity", timeline_preference="24-48 months", strategic_interest="Value-Add", tier_level="Tier 2", status="Active"),
+        Investor(name="Angela Moretti", accreditation_status="Accredited", check_size_min=100000, check_size_max=500000, asset_preference="Multifamily", geography_preference="Southeast", risk_tolerance="Conservative", structure_preference="Preferred Equity", timeline_preference="12-36 months", strategic_interest="Cash Flow", tier_level="Tier 1", status="Active"),
+        Investor(name="Horizon Family Office", accreditation_status="Qualified Purchaser", check_size_min=1000000, check_size_max=10000000, asset_preference="Commercial", geography_preference="National", risk_tolerance="Aggressive", structure_preference="JV Equity", timeline_preference="36-60 months", strategic_interest="Development", tier_level="Tier 2", status="Active"),
+        Investor(name="Thomas Blackwell", accreditation_status="Accredited", check_size_min=250000, check_size_max=1000000, asset_preference="Mixed-Use", geography_preference="Mid-Atlantic", risk_tolerance="Moderate", structure_preference="LP Equity", timeline_preference="18-36 months", strategic_interest="Stabilized", tier_level="Tier 1", status="Prospect"),
+        Investor(name="Pacific Ridge Investments", accreditation_status="Qualified Purchaser", check_size_min=2000000, check_size_max=15000000, asset_preference="Mixed-Use", geography_preference="West Coast", risk_tolerance="Aggressive", structure_preference="Co-GP", timeline_preference="48-72 months", strategic_interest="Ground-Up", tier_level="Tier 2", status="Active"),
     ]
     db.session.add_all(investors)
     db.session.flush()
@@ -411,16 +417,16 @@ def seed_demo_data():
 
     milestones = [
         # Project 1 (The Meridian) — Construction milestones
-        Milestone(project_id=project1.id, portfolio_id=portfolio.id, name="Foundation Complete", category="Construction", target_date=date(2025, 9, 15), completion_date=date(2025, 9, 20), status="Complete", delay_explanation="5-day weather delay", risk_flag=False),
-        Milestone(project_id=project1.id, portfolio_id=portfolio.id, name="Framing Complete", category="Construction", target_date=date(2025, 12, 1), completion_date=None, status="In Progress", delay_explanation=None, risk_flag=False),
-        Milestone(project_id=project1.id, portfolio_id=portfolio.id, name="MEP Rough-In", category="Construction", target_date=date(2026, 2, 15), completion_date=None, status="Not Started", delay_explanation=None, risk_flag=False),
-        Milestone(project_id=project1.id, portfolio_id=portfolio.id, name="Exterior Envelope", category="Construction", target_date=date(2026, 5, 1), completion_date=None, status="Not Started", delay_explanation=None, risk_flag=False),
+        Milestone(project_id=project1.id, portfolio_id=portfolio.id, name="Foundation Complete", category="Construction", target_date=date(2025, 9, 15), completion_date=date(2025, 9, 20), status="Completed", delay_explanation="5-day weather delay", risk_flag=False),
+        Milestone(project_id=project1.id, portfolio_id=portfolio.id, name="Steel Structure", category="Construction", target_date=date(2025, 12, 1), completion_date=None, status="In Progress", delay_explanation=None, risk_flag=False),
+        Milestone(project_id=project1.id, portfolio_id=portfolio.id, name="MEP Rough-In", category="Construction", target_date=date(2026, 2, 15), completion_date=None, status="Pending", delay_explanation=None, risk_flag=False),
+        Milestone(project_id=project1.id, portfolio_id=portfolio.id, name="Building Envelope", category="Construction", target_date=date(2026, 5, 1), completion_date=None, status="Pending", delay_explanation=None, risk_flag=True),
         # Project 2 (Parkside Commons) — Entitlements milestones
-        Milestone(project_id=project2.id, portfolio_id=portfolio.id, name="Zoning Approval", category="Entitlements", target_date=date(2025, 11, 1), completion_date=None, status="In Progress", delay_explanation=None, risk_flag=True),
-        Milestone(project_id=project2.id, portfolio_id=portfolio.id, name="Site Plan Approval", category="Entitlements", target_date=date(2026, 1, 15), completion_date=None, status="Not Started", delay_explanation=None, risk_flag=False),
-        # Project 3 (Harbor Point) — Stabilization milestones (both flagged as at-risk)
-        Milestone(project_id=project3.id, portfolio_id=portfolio.id, name="Tenant Buildout", category="Stabilization", target_date=date(2025, 8, 1), completion_date=None, status="In Progress", delay_explanation="Supply chain delays on HVAC units", risk_flag=True),
-        Milestone(project_id=project3.id, portfolio_id=portfolio.id, name="Certificate of Occupancy", category="Compliance", target_date=date(2025, 10, 15), completion_date=None, status="Not Started", delay_explanation=None, risk_flag=True),
+        Milestone(project_id=project2.id, portfolio_id=portfolio.id, name="Entitlements Secured", category="Pre-Development", target_date=date(2025, 11, 1), completion_date=None, status="In Progress", delay_explanation=None, risk_flag=True),
+        Milestone(project_id=project2.id, portfolio_id=portfolio.id, name="Design Development", category="Design", target_date=date(2026, 1, 15), completion_date=None, status="Pending", delay_explanation=None, risk_flag=False),
+        # Project 3 (Harbor Point) — Stabilization milestones
+        Milestone(project_id=project3.id, portfolio_id=portfolio.id, name="Demo Complete", category="Renovation", target_date=date(2025, 3, 15), completion_date=date(2025, 3, 12), status="Completed", delay_explanation=None, risk_flag=False),
+        Milestone(project_id=project3.id, portfolio_id=portfolio.id, name="Tenant Improvements", category="Renovation", target_date=date(2025, 8, 30), completion_date=None, status="Delayed", delay_explanation="Supply chain issues with custom millwork", risk_flag=True),
     ]
     db.session.add_all(milestones)
 
@@ -428,14 +434,51 @@ def seed_demo_data():
     # Service providers assigned to specific assets. Includes COI status
     # and SLA type to demonstrate vendor compliance tracking.
 
-    vendors = [
-        Vendor(asset_id=asset1.id, portfolio_id=portfolio.id, name="Summit Construction Co.", type="General Contractor", coi_status="Current", sla_type="Standard", performance_score=92),
-        Vendor(asset_id=asset1.id, portfolio_id=portfolio.id, name="ProMech HVAC", type="Mechanical", coi_status="Current", sla_type="Priority", performance_score=88),
-        Vendor(asset_id=asset2.id, portfolio_id=portfolio.id, name="Urban Electric LLC", type="Electrical", coi_status="Expired", sla_type="Standard", performance_score=75),
-        Vendor(asset_id=asset3.id, portfolio_id=portfolio.id, name="Coastal Plumbing", type="Plumbing", coi_status="Current", sla_type="Standard", performance_score=85),
-        Vendor(asset_id=asset3.id, portfolio_id=portfolio.id, name="SafeGuard Fire Systems", type="Fire Protection", coi_status="Current", sla_type="Priority", performance_score=95),
+    vendor1 = Vendor(asset_id=asset1.id, portfolio_id=portfolio.id, name="Summit Construction Co.", type="General Contractor", coi_status="Current", sla_type="Standard", performance_score=92)
+    vendor2 = Vendor(asset_id=asset1.id, portfolio_id=portfolio.id, name="ProMech HVAC", type="Mechanical", coi_status="Current", sla_type="Priority", performance_score=88)
+    vendor3 = Vendor(asset_id=asset2.id, portfolio_id=portfolio.id, name="Urban Electric LLC", type="Electrical", coi_status="Expired", sla_type="Standard", performance_score=75)
+    vendor4 = Vendor(asset_id=asset3.id, portfolio_id=portfolio.id, name="Coastal Plumbing", type="Plumbing", coi_status="Current", sla_type="Standard", performance_score=85)
+    vendor5 = Vendor(asset_id=asset3.id, portfolio_id=portfolio.id, name="SafeGuard Fire Systems", type="Fire Protection", coi_status="Current", sla_type="Priority", performance_score=95)
+    db.session.add_all([vendor1, vendor2, vendor3, vendor4, vendor5])
+    db.session.flush()
+
+    # --- Allocations ---
+    # Investor commitments to specific deals. Demonstrates soft/hard commit
+    # tracking and the status flow from Pending through Funded.
+
+    allocations = [
+        Allocation(investor_id=investors[0].id, deal_id=deal1.id, soft_commit_amount=2000000, hard_commit_amount=1500000, status="Hard Commit", notes="Completed DD, signed subscription"),
+        Allocation(investor_id=investors[1].id, deal_id=deal1.id, soft_commit_amount=350000, hard_commit_amount=350000, status="Funded", notes="Wire confirmed"),
+        Allocation(investor_id=investors[2].id, deal_id=deal1.id, soft_commit_amount=5000000, hard_commit_amount=0, status="Soft Commit", notes="Awaiting IC approval"),
+        Allocation(investor_id=investors[4].id, deal_id=deal1.id, soft_commit_amount=3000000, hard_commit_amount=3000000, status="Funded", notes=None),
+        Allocation(investor_id=investors[2].id, deal_id=deal3.id, soft_commit_amount=2000000, hard_commit_amount=2000000, status="Funded", notes=None),
+        Allocation(investor_id=investors[0].id, deal_id=deal3.id, soft_commit_amount=1000000, hard_commit_amount=1000000, status="Funded", notes=None),
+        Allocation(investor_id=investors[3].id, deal_id=deal2.id, soft_commit_amount=500000, hard_commit_amount=0, status="Pending", notes="Initial interest expressed"),
     ]
-    db.session.add_all(vendors)
+    db.session.add_all(allocations)
+
+    # --- Work Orders ---
+    # Vendor assignments demonstrating CapEx/OpEx classification and priority levels.
+
+    work_orders = [
+        WorkOrder(vendor_id=vendor1.id, asset_id=asset1.id, portfolio_id=portfolio.id, type="Construction", priority="High", cost=125000, capex_flag=True, status="In Progress"),
+        WorkOrder(vendor_id=vendor2.id, asset_id=asset1.id, portfolio_id=portfolio.id, type="HVAC Installation", priority="Medium", cost=45000, capex_flag=True, status="Open"),
+        WorkOrder(vendor_id=vendor3.id, asset_id=asset2.id, portfolio_id=portfolio.id, type="Electrical Upgrade", priority="High", cost=32000, capex_flag=True, status="In Progress"),
+        WorkOrder(vendor_id=vendor5.id, asset_id=asset3.id, portfolio_id=portfolio.id, type="Fire Alarm", priority="Urgent", cost=8500, capex_flag=False, status="Open"),
+    ]
+    db.session.add_all(work_orders)
+
+    # --- Risk Flags ---
+    # Standalone risk events tied to projects. Demonstrates category-based
+    # risk tracking for the governance dashboard.
+
+    risk_flags = [
+        RiskFlag(project_id=project1.id, portfolio_id=portfolio.id, category="Schedule", severity="Medium", description="Building envelope timeline at risk due to steel delivery delays", status="Open"),
+        RiskFlag(project_id=project2.id, portfolio_id=portfolio.id, category="Regulatory", severity="High", description="Entitlement hearing postponed, potential 60-day delay", status="Open"),
+        RiskFlag(project_id=project3.id, portfolio_id=portfolio.id, category="Supply Chain", severity="Medium", description="Custom millwork vendor experiencing production delays", status="Open"),
+        RiskFlag(project_id=project1.id, portfolio_id=portfolio.id, category="Budget", severity="Low", description="Minor cost overrun on foundation work, within contingency", status="Mitigated"),
+    ]
+    db.session.add_all(risk_flags)
 
     # Commit all seeded data in a single transaction
     db.session.commit()

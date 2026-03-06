@@ -15,14 +15,14 @@ Vite proxies all `/api` requests to the Flask backend automatically.
 - **Database**: PostgreSQL (Replit-managed via DATABASE_URL)
 - **Auth**: flask-jwt-extended — stateless Bearer token authentication (1h access tokens)
 - **CORS**: Flask-CORS configured for cross-origin requests
-- **API Versioning**: All routes under `/api/v1/`
+- **API Versioning**: Authenticated routes under `/api/v1/`; GUI compatibility layer at `/api/`
 
 ## Project Structure
 ```
 main.py                          # Flask API entry point (port 3001)
 app/
   __init__.py                    # App factory, DB init, CORS, JWT, seed data
-  models.py                     # SQLAlchemy models (10 entities, all with to_dict())
+  models.py                     # SQLAlchemy models (11 entities, all with to_dict())
   auth_utils.py                 # get_current_user(), role_required() (flask-jwt-extended)
   routes/
     auth.py                     # POST /api/v1/auth/login, GET /api/v1/auth/me
@@ -30,6 +30,7 @@ app/
     capital.py                  # Module 1: Capital Engine (/api/v1/capital/*)
     execution.py                # Module 2: Execution Control (/api/v1/execution/*)
     vendor.py                   # Module 3: Asset & Vendor Control (/api/v1/vendor/*)
+    compat.py                   # GUI Compatibility Layer (/api/*) — camelCase, string IDs, no auth
 client/
   vite.config.ts                # Vite config (port 5000, proxy /api → localhost:3001)
   index.html                    # HTML entry point
@@ -37,7 +38,7 @@ client/
   src/
     main.tsx                    # React entry point
     App.tsx                     # Router: /login, /dashboard, catch-all → /dashboard
-    index.css                   # Global styles
+    index.css                   # Global styles (dark theme matching GUI)
     vite-env.d.ts               # Vite env type declarations
     lib/
       api.ts                    # API client (token storage, auth header, typed requests)
@@ -52,13 +53,27 @@ client/
 - **Start application**: `npx vite --config client/vite.config.ts` (port 5000, webview)
 - **API Server**: `python main.py` (port 3001, console)
 
+## Two API Layers
+
+### Authenticated API (`/api/v1/`) — snake_case, integer IDs, JWT required
+Used by the local React frontend and any direct API consumers.
+All routes require `Authorization: Bearer <jwt>` header.
+
+### GUI Compatibility API (`/api/`) — camelCase, string IDs, no auth
+Used by the external CapitalOps GUI Repl (Express proxy → Flask).
+The GUI's Express server sets `BACKEND_URL` and proxies requests directly.
+Returns flat arrays with camelCase keys and string-typed IDs matching the
+frontend's Zod schemas.
+
+**Compat route file**: `app/routes/compat.py`
+
 ## Frontend Routes
 - `/login` — Login page (username/password form)
 - `/dashboard` — Protected project dashboard (requires JWT)
 - `/*` — Redirects to `/dashboard`
 
 ## API Authentication
-All routes (except POST /api/v1/auth/login) require a JWT in the Authorization header:
+All `/api/v1/` routes (except POST /api/v1/auth/login) require a JWT in the Authorization header:
 ```
 Authorization: Bearer <jwt_token>
 ```
@@ -67,7 +82,9 @@ Token identity: `str(user.id)` (stringified integer — PyJWT 2.x requires strin
 Additional claims: `{ role: "sponsor_admin" }`
 Default expiration: 1 hour (configurable via JWT_ACCESS_TOKEN_EXPIRES_MINUTES env var)
 
-## API Route Summary (v1)
+## API Route Summary
+
+### v1 Authenticated Routes (snake_case)
 - `POST /api/v1/auth/login`       — Authenticate, returns `{ accessToken, user }`
 - `GET  /api/v1/auth/me`          — Current user profile (requires JWT)
 - `GET  /api/v1/dashboard/`       — Portfolio overview stats
@@ -87,6 +104,36 @@ Default expiration: 1 hour (configurable via JWT_ACCESS_TOKEN_EXPIRES_MINUTES en
 - `GET  /api/v1/vendor/work-orders` — Work order listing
 - `POST /api/v1/vendor/work-orders` — Create work order
 - `PATCH /api/v1/vendor/work-orders/<id>` — Update work order
+
+### GUI Compatibility Routes (camelCase, no auth)
+- `GET  /api/backend-status`     — Backend connectivity info
+- `GET  /api/dashboard/stats`    — Dashboard stat cards
+- `GET  /api/portfolios`         — All portfolios
+- `GET  /api/assets`             — All assets
+- `GET  /api/assets/<id>`        — Single asset
+- `POST /api/assets`             — Create asset
+- `GET  /api/projects`           — All projects
+- `GET  /api/projects/<id>`      — Single project
+- `POST /api/projects`           — Create project
+- `GET  /api/deals`              — All deals
+- `GET  /api/deals/<id>`         — Single deal
+- `POST /api/deals`              — Create deal
+- `GET  /api/investors`          — All investors
+- `GET  /api/investors/<id>`     — Single investor
+- `POST /api/investors`          — Create investor
+- `GET  /api/allocations`        — All allocations
+- `POST /api/allocations`        — Create allocation
+- `GET  /api/milestones`         — All milestones
+- `GET  /api/milestones/project/<id>` — Milestones by project
+- `POST /api/milestones`         — Create milestone
+- `GET  /api/vendors`            — All vendors
+- `GET  /api/vendors/<id>`       — Single vendor
+- `POST /api/vendors`            — Create vendor
+- `GET  /api/work-orders`        — All work orders
+- `GET  /api/work-orders/vendor/<id>` — Work orders by vendor
+- `POST /api/work-orders`        — Create work order
+- `GET  /api/risk-flags`         — All risk flags
+- `GET  /api/risk-flags/project/<id>` — Risk flags by project
 
 ## Data Model (11 Core Entities)
 All models have a `to_dict()` method for JSON serialization.
@@ -141,7 +188,19 @@ Operational truth → Governance interpretation → Investor transparency
 - Never seeds when `FLASK_ENV=production` (hard safety guard)
 - Manual seed via Flask CLI: `FLASK_APP=main.py flask seed`
 - Idempotent: skips if users already exist in the database
-- Seeds: 3 users, 1 portfolio, 3 assets, 3 projects, 3 deals, 5 investors, 8 milestones, 5 vendors
+- Seeds: 3 users, 1 portfolio, 3 assets, 3 projects, 3 deals, 5 investors, 7 allocations, 8 milestones, 5 vendors, 4 work orders, 4 risk flags
+
+## Deployment
+- **Target**: Autoscale
+- **Command**: `gunicorn --bind=0.0.0.0:5000 --reuse-port main:app`
+- **Health check**: `GET /` returns `{"status": "ok", "service": "capitalops-api"}`
+- **Production env**: `FLASK_ENV=production` (blocks seeding), `JWT_SECRET_KEY` (random 32-byte hex)
+
+## GUI Repl Integration
+The external GUI Repl (capitalOps-frontend-GUI) connects by setting:
+- `BACKEND_URL` env var on the GUI Repl pointing to this API's deployed URL
+- The GUI's Express server proxies all `/api/*` requests to the backend
+- The compat layer (`/api/`) returns data in the exact format the GUI expects
 
 ## Commenting Convention
 All Python source files maintain comprehensive docstrings and inline comments.
