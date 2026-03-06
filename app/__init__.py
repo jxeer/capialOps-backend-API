@@ -145,6 +145,14 @@ def create_app():
         """Return 500 JSON on unhandled server errors."""
         return jsonify({"error": "Internal server error"}), 500
 
+    # --- Health Check ---
+    # Returns 200 on GET / for deployment health checks and uptime monitors.
+
+    @app.route("/")
+    def health_check():
+        """Health check endpoint for deployment probes."""
+        return jsonify({"status": "ok", "service": "capitalops-api"}), 200
+
     # --- Register Blueprints ---
     # All routes are versioned under /api/v1/ and return JSON only.
 

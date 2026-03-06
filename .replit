@@ -11,8 +11,8 @@ language = "python3"
 requiredFiles = [".replit", "replit.nix"]
 
 [deployment]
-run = ["python3", "main.py"]
-deploymentTarget = "cloudrun"
+run = ["gunicorn", "--bind=0.0.0.0:5000", "--reuse-port", "main:app"]
+deploymentTarget = "autoscale"
 
 [agent]
 expertMode = true
@@ -69,3 +69,7 @@ externalPort = 80
 
 [userenv.shared]
 FRONTEND_ORIGIN = "https://capital-ops-gui.replit.app"
+
+[userenv.production]
+FLASK_ENV = "production"
+JWT_SECRET_KEY = "98701147c1ebe8cd1184f6b88e2dcaed25b7004f1f4c4febee3071d55897b0c4"
