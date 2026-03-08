@@ -36,6 +36,7 @@ so these routes must match the exact paths the frontend fetches:
 
 import os
 from functools import wraps
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models import (
@@ -75,16 +76,23 @@ def _snake_to_camel(name):
     return parts[0] + "".join(p.capitalize() for p in parts[1:])
 
 
+# Explicit camelCase overrides for fields where the generic converter
+# produces a different casing than what the frontend schema expects.
+_CAMEL_OVERRIDES = {
+    "capex_flag": "capExFlag",
+}
+
+
 def _to_gui(record_dict):
     """Transform a model's to_dict() output into GUI-compatible format.
 
     Applies two transformations:
-        1. All keys converted from snake_case to camelCase
+        1. All keys converted from snake_case to camelCase (with overrides)
         2. The 'id' field is cast to a string (frontend uses string IDs)
     """
     result = {}
     for key, value in record_dict.items():
-        camel_key = _snake_to_camel(key)
+        camel_key = _CAMEL_OVERRIDES.get(key, _snake_to_camel(key))
         if key == "id":
             result[camel_key] = str(value)
         elif key.endswith("_id") and value is not None:
@@ -491,28 +499,14 @@ def create_vendor():
 def list_work_orders():
     """Return all work orders as a flat array."""
     work_orders = WorkOrder.query.order_by(WorkOrder.created_at.desc()).all()
-    result = []
-    for wo in work_orders:
-        gui = _to_gui(wo.to_dict())
-        gui["capExFlag"] = gui.pop("capexFlag", False)
-        if "description" not in gui:
-            gui["description"] = ""
-        result.append(gui)
-    return jsonify(result)
+    return jsonify([_to_gui(wo.to_dict()) for wo in work_orders])
 
 
 @compat_bp.route("/work-orders/vendor/<int:vendor_id>", methods=["GET"])
 def work_orders_by_vendor(vendor_id):
     """Return work orders filtered by vendor ID."""
     work_orders = WorkOrder.query.filter_by(vendor_id=vendor_id).all()
-    result = []
-    for wo in work_orders:
-        gui = _to_gui(wo.to_dict())
-        gui["capExFlag"] = gui.pop("capexFlag", False)
-        if "description" not in gui:
-            gui["description"] = ""
-        result.append(gui)
-    return jsonify(result)
+    return jsonify([_to_gui(wo.to_dict()) for wo in work_orders])
 
 
 @compat_bp.route("/work-orders", methods=["POST"])
@@ -537,14 +531,11 @@ def create_work_order():
         cost=data.get("cost", 0),
         capex_flag=data.get("capExFlag", False),
         status=data.get("status", "Open"),
+        description=data.get("description"),
     )
     db.session.add(wo)
     db.session.commit()
-
-    gui = _to_gui(wo.to_dict())
-    gui["capExFlag"] = gui.pop("capexFlag", False)
-    gui["description"] = data.get("description", "")
-    return jsonify(gui), 201
+    return jsonify(_to_gui(wo.to_dict())), 201
 
 
 # ---------------------------------------------------------------------------
@@ -563,3 +554,310 @@ def risk_flags_by_project(project_id):
     """Return risk flags filtered by project ID."""
     risk_flags = RiskFlag.query.filter_by(project_id=project_id).order_by(RiskFlag.created_at.desc()).all()
     return jsonify([_to_gui(r.to_dict()) for r in risk_flags])
+
+
+# ---------------------------------------------------------------------------
+# Asset mutations (PUT / DELETE)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/assets/<int:asset_id>", methods=["PUT"])
+@_require_api_key
+def update_asset(asset_id):
+    """Update an asset. Expects camelCase JSON body."""
+    asset = Asset.query.get_or_404(asset_id)
+    data = request.get_json() or {}
+    if "name" in data: asset.name = data["name"]
+    if "location" in data: asset.location = data["location"]
+    if "assetType" in data: asset.asset_type = data["assetType"]
+    if "squareFootage" in data: asset.square_footage = data["squareFootage"]
+    if "status" in data: asset.status = data["status"]
+    if "assetManager" in data: asset.asset_manager = data["assetManager"]
+    db.session.commit()
+    return jsonify(_to_gui(asset.to_dict()))
+
+
+@compat_bp.route("/assets/<int:asset_id>", methods=["DELETE"])
+@_require_api_key
+def delete_asset(asset_id):
+    """Delete an asset."""
+    asset = Asset.query.get_or_404(asset_id)
+    db.session.delete(asset)
+    db.session.commit()
+    return jsonify({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Project mutations (PUT / DELETE)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/projects/<int:project_id>", methods=["PUT"])
+@_require_api_key
+def update_project(project_id):
+    """Update a project. Expects camelCase JSON body."""
+    project = Project.query.get_or_404(project_id)
+    data = request.get_json() or {}
+    if "phase" in data: project.phase = data["phase"]
+    if "startDate" in data: project.start_date = data["startDate"]
+    if "targetCompletion" in data: project.target_completion = data["targetCompletion"]
+    if "budgetTotal" in data: project.budget_total = data["budgetTotal"]
+    if "budgetActual" in data: project.budget_actual = data["budgetActual"]
+    if "status" in data: project.status = data["status"]
+    if "pmAssigned" in data: project.pm_assigned = data["pmAssigned"]
+    db.session.commit()
+    return jsonify(_to_gui(project.to_dict()))
+
+
+@compat_bp.route("/projects/<int:project_id>", methods=["DELETE"])
+@_require_api_key
+def delete_project(project_id):
+    """Delete a project."""
+    project = Project.query.get_or_404(project_id)
+    db.session.delete(project)
+    db.session.commit()
+    return jsonify({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Deal mutations (PUT / DELETE)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/deals/<int:deal_id>", methods=["PUT"])
+@_require_api_key
+def update_deal(deal_id):
+    """Update a deal. Expects camelCase JSON body."""
+    deal = Deal.query.get_or_404(deal_id)
+    data = request.get_json() or {}
+    if "capitalRequired" in data: deal.capital_required = data["capitalRequired"]
+    if "capitalRaised" in data: deal.capital_raised = data["capitalRaised"]
+    if "returnProfile" in data: deal.return_profile = data["returnProfile"]
+    if "duration" in data: deal.duration = data["duration"]
+    if "riskLevel" in data: deal.risk_level = data["riskLevel"]
+    if "complexity" in data: deal.complexity = data["complexity"]
+    if "phase" in data: deal.phase = data["phase"]
+    if "status" in data: deal.status = data["status"]
+    db.session.commit()
+    return jsonify(_to_gui(deal.to_dict()))
+
+
+@compat_bp.route("/deals/<int:deal_id>", methods=["DELETE"])
+@_require_api_key
+def delete_deal(deal_id):
+    """Delete a deal."""
+    deal = Deal.query.get_or_404(deal_id)
+    db.session.delete(deal)
+    db.session.commit()
+    return jsonify({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Investor mutations (PUT / DELETE)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/investors/<int:investor_id>", methods=["PUT"])
+@_require_api_key
+def update_investor(investor_id):
+    """Update an investor. Expects camelCase JSON body."""
+    investor = Investor.query.get_or_404(investor_id)
+    data = request.get_json() or {}
+    if "name" in data: investor.name = data["name"]
+    if "accreditationStatus" in data: investor.accreditation_status = data["accreditationStatus"]
+    if "checkSizeMin" in data: investor.check_size_min = data["checkSizeMin"]
+    if "checkSizeMax" in data: investor.check_size_max = data["checkSizeMax"]
+    if "assetPreference" in data: investor.asset_preference = data["assetPreference"]
+    if "geographyPreference" in data: investor.geography_preference = data["geographyPreference"]
+    if "riskTolerance" in data: investor.risk_tolerance = data["riskTolerance"]
+    if "structurePreference" in data: investor.structure_preference = data["structurePreference"]
+    if "timelinePreference" in data: investor.timeline_preference = data["timelinePreference"]
+    if "strategicInterest" in data: investor.strategic_interest = data["strategicInterest"]
+    if "tierLevel" in data: investor.tier_level = data["tierLevel"]
+    if "status" in data: investor.status = data["status"]
+    db.session.commit()
+    return jsonify(_to_gui(investor.to_dict()))
+
+
+@compat_bp.route("/investors/<int:investor_id>", methods=["DELETE"])
+@_require_api_key
+def delete_investor(investor_id):
+    """Delete an investor."""
+    investor = Investor.query.get_or_404(investor_id)
+    db.session.delete(investor)
+    db.session.commit()
+    return jsonify({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Allocation mutations (PUT / DELETE)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/allocations/<int:allocation_id>", methods=["PUT"])
+@_require_api_key
+def update_allocation(allocation_id):
+    """Update an allocation. Expects camelCase JSON body."""
+    allocation = Allocation.query.get_or_404(allocation_id)
+    data = request.get_json() or {}
+    if "softCommitAmount" in data: allocation.soft_commit_amount = data["softCommitAmount"]
+    if "hardCommitAmount" in data: allocation.hard_commit_amount = data["hardCommitAmount"]
+    if "status" in data: allocation.status = data["status"]
+    if "notes" in data: allocation.notes = data["notes"]
+    db.session.commit()
+    gui = _to_gui(allocation.to_dict())
+    gui["timestamp"] = gui.pop("createdAt", None)
+    return jsonify(gui)
+
+
+@compat_bp.route("/allocations/<int:allocation_id>", methods=["DELETE"])
+@_require_api_key
+def delete_allocation(allocation_id):
+    """Delete an allocation."""
+    allocation = Allocation.query.get_or_404(allocation_id)
+    db.session.delete(allocation)
+    db.session.commit()
+    return jsonify({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Milestone mutations (PUT / DELETE)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/milestones/<int:milestone_id>", methods=["PUT"])
+@_require_api_key
+def update_milestone(milestone_id):
+    """Update a milestone. Expects camelCase JSON body."""
+    milestone = Milestone.query.get_or_404(milestone_id)
+    data = request.get_json() or {}
+    if "name" in data: milestone.name = data["name"]
+    if "category" in data: milestone.category = data["category"]
+    if "targetDate" in data: milestone.target_date = data["targetDate"]
+    if "completionDate" in data: milestone.completion_date = data["completionDate"]
+    if "status" in data: milestone.status = data["status"]
+    if "delayExplanation" in data: milestone.delay_explanation = data["delayExplanation"]
+    if "riskFlag" in data: milestone.risk_flag = data["riskFlag"]
+    db.session.commit()
+    return jsonify(_to_gui(milestone.to_dict()))
+
+
+@compat_bp.route("/milestones/<int:milestone_id>", methods=["DELETE"])
+@_require_api_key
+def delete_milestone(milestone_id):
+    """Delete a milestone."""
+    milestone = Milestone.query.get_or_404(milestone_id)
+    db.session.delete(milestone)
+    db.session.commit()
+    return jsonify({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Vendor mutations (PUT / DELETE)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/vendors/<int:vendor_id>", methods=["PUT"])
+@_require_api_key
+def update_vendor(vendor_id):
+    """Update a vendor. Expects camelCase JSON body."""
+    vendor = Vendor.query.get_or_404(vendor_id)
+    data = request.get_json() or {}
+    if "name" in data: vendor.name = data["name"]
+    if "type" in data: vendor.type = data["type"]
+    if "coiStatus" in data: vendor.coi_status = data["coiStatus"]
+    if "slaType" in data: vendor.sla_type = data["slaType"]
+    if "performanceScore" in data: vendor.performance_score = data["performanceScore"]
+    db.session.commit()
+    return jsonify(_to_gui(vendor.to_dict()))
+
+
+@compat_bp.route("/vendors/<int:vendor_id>", methods=["DELETE"])
+@_require_api_key
+def delete_vendor(vendor_id):
+    """Delete a vendor."""
+    vendor = Vendor.query.get_or_404(vendor_id)
+    db.session.delete(vendor)
+    db.session.commit()
+    return jsonify({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Work Order mutations (PUT / DELETE)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/work-orders/<int:wo_id>", methods=["PUT"])
+@_require_api_key
+def update_work_order(wo_id):
+    """Update a work order. Expects camelCase JSON body."""
+    wo = WorkOrder.query.get_or_404(wo_id)
+    data = request.get_json() or {}
+    if "type" in data: wo.type = data["type"]
+    if "priority" in data: wo.priority = data["priority"]
+    if "cost" in data: wo.cost = data["cost"]
+    if "capExFlag" in data: wo.capex_flag = data["capExFlag"]
+    if "status" in data: wo.status = data["status"]
+    if "completionDate" in data: wo.completion_date = data["completionDate"]
+    if "description" in data: wo.description = data["description"]
+    db.session.commit()
+    return jsonify(_to_gui(wo.to_dict()))
+
+
+@compat_bp.route("/work-orders/<int:wo_id>", methods=["DELETE"])
+@_require_api_key
+def delete_work_order(wo_id):
+    """Delete a work order."""
+    wo = WorkOrder.query.get_or_404(wo_id)
+    db.session.delete(wo)
+    db.session.commit()
+    return jsonify({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Risk Flag mutations (POST / PUT / DELETE)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/risk-flags", methods=["POST"])
+@_require_api_key
+def create_risk_flag():
+    """Create a new risk flag. Expects camelCase JSON body.
+
+    Required: projectId
+    Returns (201): the created risk flag.
+    """
+    data = request.get_json()
+    if not data or not data.get("projectId"):
+        return jsonify({"error": "projectId is required"}), 400
+
+    portfolio = Portfolio.query.first()
+    rf = RiskFlag(
+        project_id=int(data["projectId"]),
+        portfolio_id=int(data.get("portfolioId", portfolio.id if portfolio else 1)),
+        category=data.get("category", ""),
+        severity=data.get("severity", "Medium"),
+        description=data.get("description", ""),
+        status=data.get("status", "Open"),
+    )
+    db.session.add(rf)
+    db.session.commit()
+    return jsonify(_to_gui(rf.to_dict())), 201
+
+
+@compat_bp.route("/risk-flags/<int:rf_id>", methods=["PUT"])
+@_require_api_key
+def update_risk_flag(rf_id):
+    """Update a risk flag. Expects camelCase JSON body."""
+    rf = RiskFlag.query.get_or_404(rf_id)
+    data = request.get_json() or {}
+    if "category" in data: rf.category = data["category"]
+    if "severity" in data: rf.severity = data["severity"]
+    if "description" in data: rf.description = data["description"]
+    if "status" in data:
+        rf.status = data["status"]
+        if data["status"] == "Resolved" and not rf.resolved_at:
+            rf.resolved_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(_to_gui(rf.to_dict()))
+
+
+@compat_bp.route("/risk-flags/<int:rf_id>", methods=["DELETE"])
+@_require_api_key
+def delete_risk_flag(rf_id):
+    """Delete a risk flag."""
+    rf = RiskFlag.query.get_or_404(rf_id)
+    db.session.delete(rf)
+    db.session.commit()
+    return jsonify({"deleted": True})
