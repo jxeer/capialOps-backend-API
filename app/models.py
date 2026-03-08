@@ -442,6 +442,7 @@ class WorkOrder(db.Model):
     capex_flag = db.Column(db.Boolean, default=False) # True = Capital Expenditure, False = Operating Expense
     status = db.Column(db.String(50))                # Open, In Progress, Complete, Cancelled
     completion_date = db.Column(db.Date)             # Date work was completed
+    description = db.Column(db.Text)                 # Free-text description of the work to be done
     photo_url = db.Column(db.String(500))            # URL for completion photo documentation
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -459,6 +460,7 @@ class WorkOrder(db.Model):
             "capex_flag": self.capex_flag,
             "status": self.status,
             "completion_date": self.completion_date.isoformat() if self.completion_date else None,
+            "description": self.description,
             "photo_url": self.photo_url,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
