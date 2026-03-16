@@ -69,7 +69,10 @@ def create_app():
     app.config["JWT_HEADER_TYPE"] = "Bearer"
 
     # PostgreSQL connection string provided by Replit's managed database
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        db_url = "sqlite:///capitalops.db"
+    app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 
     # Disable modification tracking to save memory (we don't use this feature)
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False

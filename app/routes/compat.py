@@ -35,13 +35,14 @@ so these routes must match the exact paths the frontend fetches:
 """
 
 import os
+import uuid
 from functools import wraps
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models import (
     Portfolio, Asset, Project, Deal, Investor,
-    Allocation, Milestone, Vendor, WorkOrder, RiskFlag,
+    Allocation, Milestone, Vendor, WorkOrder, RiskFlag, User,
 )
 
 compat_bp = Blueprint("compat", __name__)
@@ -861,3 +862,371 @@ def delete_risk_flag(rf_id):
     db.session.delete(rf)
     db.session.commit()
     return jsonify({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# S3 File Upload (Phase 4 - Profile Enhancement)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/upload", methods=["POST"])
+@_require_api_key
+def upload_file():
+    """
+    Handle file uploads (images for profile avatars).
+    
+    Required headers:
+        X-API-Key: <compat_api_key>
+    
+    Required form-data:
+        file: <image file>
+        path: "avatars/user-id/timestamp-filename.jpg"
+        contentType: "image/jpeg"
+        fileName: "original.jpg"
+    
+    Returns:
+        {
+            "url": "https://bucket.s3.amazonaws.com/avatars/...",
+            "key": "avatars/user-id/timestamp-filename.jpg"
+        }
+    """
+    import boto3
+    
+    api_key = os.environ.get("COMPAT_API_KEY")
+    if api_key:
+        provided = request.headers.get("X-API-Key", "")
+        if provided != api_key:
+            return jsonify({"error": "Invalid or missing API key"}), 403
+    
+    file = request.files.get("file")
+    path = request.form.get("path")
+    
+    if not file or not path:
+        return jsonify({"error": "File and path are required"}), 400
+    
+    bucket_name = os.environ.get("AWS_BUCKET_NAME")
+    if not bucket_name:
+        return jsonify({"error": "AWS_BUCKET_NAME not configured"}), 500
+    
+    try:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+            region_name=os.environ.get("AWS_REGION", "us-east-1")
+        )
+        
+        s3.upload_fileobj(file, bucket_name, path)
+        
+        url = f"https://{bucket_name}.s3.amazonaws.com/{path}"
+        return jsonify({"url": url, "key": path}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Connection & Messaging API (Phase 4)
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/connection-requests", methods=["GET"])
+@_require_api_key
+def list_connection_requests():
+    """List connection requests for the current user (as receiver)."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    requests = ConnectionRequest.query.filter_by(receiver_id=int(user_id)).all()
+    return jsonify([r.to_dict() for r in requests])
+
+
+@compat_bp.route("/connection-requests", methods=["POST"])
+@_require_api_key
+def send_connection_request():
+    """Send a connection request to another user."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    data = request.get_json()
+    if not data or not data.get("receiverId"):
+        return jsonify({"error": "receiverId is required"}), 400
+    
+    sender_id = int(user_id)
+    receiver_id = int(data["receiverId"])
+    message = data.get("message", "")
+    
+    existing = ConnectionRequest.query.filter(
+        (ConnectionRequest.sender_id == sender_id and ConnectionRequest.receiver_id == receiver_id) |
+        (ConnectionRequest.sender_id == receiver_id and ConnectionRequest.receiver_id == sender_id)
+    ).first()
+    
+    if existing:
+        return jsonify({"error": "Connection already exists or request pending"}), 400
+    
+    req = ConnectionRequest(
+        sender_id=sender_id,
+        receiver_id=receiver_id,
+        message=message,
+        status="pending"
+    )
+    db.session.add(req)
+    db.session.commit()
+    
+    return jsonify(req.to_dict()), 201
+
+
+@compat_bp.route("/connection-requests/<int:req_id>", methods=["PUT"])
+@_require_api_key
+def update_connection_request(req_id):
+    """Accept or decline a connection request."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    req = ConnectionRequest.query.get_or_404(req_id)
+    
+    if req.receiver_id != int(user_id):
+        return jsonify({"error": " Not authorized to update this request"}), 403
+    
+    data = request.get_json()
+    if not data or not data.get("status"):
+        return jsonify({"error": "status is required"}), 400
+    
+    if data["status"] not in ("accepted", "declined"):
+        return jsonify({"error": "status must be 'accepted' or 'declined'"}), 400
+    
+    req.status = data["status"]
+    req.responded_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify(req.to_dict())
+
+
+@compat_bp.route("/connection-requests/<int:req_id>", methods=["DELETE"])
+@_require_api_key
+def delete_connection_request(req_id):
+    """Withdraw a connection request."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    req = ConnectionRequest.query.get_or_404(req_id)
+    
+    if req.sender_id != int(user_id):
+        return jsonify({"error": "Not authorized to delete this request"}), 403
+    
+    db.session.delete(req)
+    db.session.commit()
+    
+    return jsonify({"deleted": True})
+
+
+@compat_bp.route("/connections", methods=["GET"])
+@_require_api_key
+def list_connections():
+    """Get all connected users for the current user."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    requests = ConnectionRequest.query.filter(
+        (ConnectionRequest.sender_id == int(user_id)) | (ConnectionRequest.receiver_id == int(user_id))
+    ).filter_by(status="accepted").all()
+    
+    connections = []
+    for req in requests:
+        if req.sender_id == int(user_id):
+            connections.append(req.receiver.to_dict())
+        else:
+            connections.append(req.sender.to_dict())
+    
+    return jsonify(connections)
+
+
+@compat_bp.route("/connection-pending", methods=["GET"])
+@_require_api_key
+def list_pending_requests():
+    """Get all pending incoming connection requests for the current user."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    requests = ConnectionRequest.query.filter_by(receiver_id=int(user_id), status="pending").all()
+    return jsonify([r.to_dict() for r in requests])
+
+
+@compat_bp.route("/conversations", methods=["GET"])
+@_require_api_key
+def list_conversations():
+    """List all conversations for the current user."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    conversations = Conversation.query.filter(
+        (Conversation.user_id1 == int(user_id)) | (Conversation.user_id2 == int(user_id))
+    ).all()
+    
+    return jsonify([c.to_dict() for c in conversations])
+
+
+@compat_bp.route("/conversations", methods=["POST"])
+@_require_api_key
+def create_conversation():
+    """Create or get a conversation with another user."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    data = request.get_json()
+    if not data or not data.get("userId"):
+        return jsonify({"error": "userId is required"}), 400
+    
+    user1_id = int(user_id)
+    user2_id = int(data["userId"])
+    
+    if user1_id == user2_id:
+        return jsonify({"error": "Cannot create conversation with yourself"}), 400
+    
+    existing = Conversation.query.filter(
+        (Conversation.user_id1 == user1_id and Conversation.user_id2 == user2_id) |
+        (Conversation.user_id1 == user2_id and Conversation.user_id2 == user1_id)
+    ).first()
+    
+    if existing:
+        return jsonify(existing.to_dict())
+    
+    conv = Conversation(user_id1=user1_id, user_id2=user2_id)
+    db.session.add(conv)
+    db.session.commit()
+    
+    return jsonify(conv.to_dict()), 201
+
+
+@compat_bp.route("/messages", methods=["GET"])
+@_require_api_key
+def list_messages():
+    """Get messages in a conversation."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    conversation_id = request.args.get("conversationId")
+    if not conversation_id:
+        return jsonify({"error": "conversationId is required"}), 400
+    
+    conv = Conversation.query.get_or_404(int(conversation_id))
+    
+    if conv.user_id1 != int(user_id) and conv.user_id2 != int(user_id):
+        return jsonify({"error": "Not authorized to view this conversation"}), 403
+    
+    messages = Message.query.filter_by(conversation_id=int(conversation_id)).all()
+    return jsonify([m.to_dict() for m in messages])
+
+
+@compat_bp.route("/messages", methods=["POST"])
+@_require_api_key
+def send_message():
+    """Send a message in a conversation."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    data = request.get_json()
+    if not data or not data.get("conversationId") or not data.get("content"):
+        return jsonify({"error": "conversationId and content are required"}), 400
+    
+    conv = Conversation.query.get_or_404(int(data["conversationId"]))
+    
+    if conv.user_id1 != int(user_id) and conv.user_id2 != int(user_id):
+        return jsonify({"error": "Not authorized to send messages to this conversation"}), 403
+    
+    msg = Message(
+        conversation_id=int(data["conversationId"]),
+        sender_id=int(user_id),
+        content=data["content"]
+    )
+    db.session.add(msg)
+    db.session.commit()
+    
+    return jsonify(msg.to_dict()), 201
+
+
+@compat_bp.route("/messages/<int:msg_id>", methods=["PUT"])
+@_require_api_key
+def update_message(msg_id):
+    """Mark a message as read."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    msg = Message.query.get_or_404(msg_id)
+    
+    conv = Conversation.query.get_or_404(msg.conversation_id)
+    if conv.user_id1 != int(user_id) and conv.user_id2 != int(user_id):
+        return jsonify({"error": "Not authorized to update this message"}), 403
+    
+    msg.read_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify(msg.to_dict())
+
+
+@compat_bp.route("/messages/<int:msg_id>", methods=["DELETE"])
+@_require_api_key
+def delete_message(msg_id):
+    """Delete a message."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        return jsonify({"error": "X-User-ID header required"}), 400
+    
+    msg = Message.query.get_or_404(msg_id)
+    
+    if msg.sender_id != int(user_id):
+        return jsonify({"error": "Not authorized to delete this message"}), 403
+    
+    db.session.delete(msg)
+    db.session.commit()
+    
+    return jsonify({"deleted": True})
+
+
+@compat_bp.route("/users/<int:user_id>", methods=["PUT"])
+@_require_api_key
+def update_user(user_id):
+    """Update a user's profile with all new Phase 4 fields."""
+    user = User.query.get_or_404(user_id)
+    data = request.get_json() or {}
+    
+    # Profile fields
+    if "profileType" in data: user.profile_type = data["profileType"]
+    if "profileStatus" in data: user.profile_status = data["profileStatus"]
+    if "title" in data: user.title = data["title"]
+    if "organization" in data: user.organization = data["organization"]
+    if "linkedInUrl" in data: user.linked_in_url = data["linkedInUrl"]
+    if "bio" in data: user.bio = data["bio"]
+    
+    # Investor fields
+    if "geographicFocus" in data: user.geographic_focus = data["geographicFocus"]
+    if "investmentStage" in data: user.investment_stage = data["investmentStage"]
+    if "targetReturn" in data: user.target_return = data["targetReturn"]
+    if "checkSizeMin" in data: user.check_size_min = data["checkSizeMin"]
+    if "checkSizeMax" in data: user.check_size_max = data["checkSizeMax"]
+    if "riskTolerance" in data: user.risk_tolerance = data["riskTolerance"]
+    if "strategicInterest" in data: user.strategic_interest = data["strategicInterest"]
+    
+    # Vendor fields
+    if "serviceTypes" in data: user.service_types = data["serviceTypes"]
+    if "geographicServiceArea" in data: user.geographic_service_area = data["geographicServiceArea"]
+    if "yearsOfExperience" in data: user.years_of_experience = data["yearsOfExperience"]
+    if "certifications" in data: user.certifications = data["certifications"]
+    if "averageProjectSize" in data: user.average_project_size = data["averageProjectSize"]
+    
+    # Developer fields
+    if "developmentFocus" in data: user.development_focus = data["developmentFocus"]
+    if "developmentType" in data: user.development_type = data["developmentType"]
+    if "teamSize" in data: user.team_size = data["teamSize"]
+    if "portfolioValue" in data: user.portfolio_value = data["portfolioValue"]
+    
+    db.session.commit()
+    return jsonify(_to_gui(user.to_dict()))

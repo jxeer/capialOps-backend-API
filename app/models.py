@@ -49,6 +49,37 @@ class User(db.Model):
     password_hash = db.Column(db.String(256), nullable=False)  # Werkzeug-hashed password
     role = db.Column(db.String(50), nullable=False)            # Role key from ROLE_PERMISSIONS
     full_name = db.Column(db.String(150))                      # Display name for the UI
+    
+    # Profile fields (Phase 4 - Profile Enhancement)
+    profile_type = db.Column(db.String(20))                    # "investor", "vendor", "developer"
+    profile_status = db.Column(db.String(20), default="pending")  # "pending", "active", "inactive", "suspended"
+    title = db.Column(db.String(100))
+    organization = db.Column(db.String(200))
+    linked_in_url = db.Column(db.String(500))
+    bio = db.Column(db.Text)
+    
+    # Investor-specific fields
+    geographic_focus = db.Column(db.String(200))
+    investment_stage = db.Column(db.String(100))
+    target_return = db.Column(db.String(100))
+    check_size_min = db.Column(db.Numeric(15, 2))
+    check_size_max = db.Column(db.Numeric(15, 2))
+    risk_tolerance = db.Column(db.String(20))                  # "Conservative", "Moderate", "Aggressive"
+    strategic_interest = db.Column(db.String(100))
+    
+    # Vendor-specific fields
+    service_types = db.Column(db.String(200))
+    geographic_service_area = db.Column(db.String(200))
+    years_of_experience = db.Column(db.String(50))
+    certifications = db.Column(db.Text)
+    average_project_size = db.Column(db.Numeric(15, 2))
+    
+    # Developer-specific fields
+    development_focus = db.Column(db.String(100))
+    development_type = db.Column(db.String(100))
+    team_size = db.Column(db.Integer)
+    portfolio_value = db.Column(db.Numeric(15, 2))
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):
@@ -96,6 +127,37 @@ class User(db.Model):
             "role": self.role,
             "role_display": self.role_display,
             "full_name": self.full_name,
+            
+            # Profile fields (Phase 4)
+            "profileType": self.profile_type,
+            "profileStatus": self.profile_status,
+            "title": self.title,
+            "organization": self.organization,
+            "linkedInUrl": self.linked_in_url,
+            "bio": self.bio,
+            
+            # Investor-specific
+            "geographicFocus": self.geographic_focus,
+            "investmentStage": self.investment_stage,
+            "targetReturn": self.target_return,
+            "checkSizeMin": float(self.check_size_min) if self.check_size_min else None,
+            "checkSizeMax": float(self.check_size_max) if self.check_size_max else None,
+            "riskTolerance": self.risk_tolerance,
+            "strategicInterest": self.strategic_interest,
+            
+            # Vendor-specific
+            "serviceTypes": self.service_types,
+            "geographicServiceArea": self.geographic_service_area,
+            "yearsOfExperience": self.years_of_experience,
+            "certifications": self.certifications,
+            "averageProjectSize": float(self.average_project_size) if self.average_project_size else None,
+            
+            # Developer-specific
+            "developmentFocus": self.development_focus,
+            "developmentType": self.development_type,
+            "teamSize": self.team_size,
+            "portfolioValue": float(self.portfolio_value) if self.portfolio_value else None,
+            
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -497,4 +559,93 @@ class RiskFlag(db.Model):
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+        }
+
+
+class ConnectionRequest(db.Model):
+    """
+    A connection request between two users.
+    
+    Status flow: pending → accepted/declined
+    """
+    __tablename__ = "connection_requests"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    receiver_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    status = db.Column(db.String(20), default="pending")  # "pending", "accepted", "declined"
+    message = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    responded_at = db.Column(db.DateTime)
+    
+    sender = db.relationship("User", foreign_keys=[sender_id], backref="sent_connection_requests")
+    receiver = db.relationship("User", foreign_keys=[receiver_id], backref="received_connection_requests")
+    
+    def to_dict(self):
+        """Serialize connection request to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "senderId": self.sender_id,
+            "receiverId": self.receiver_id,
+            "senderName": self.sender.full_name if self.sender else None,
+            "receiverName": self.receiver.full_name if self.receiver else None,
+            "status": self.status,
+            "message": self.message,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+            "respondedAt": self.responded_at.isoformat() if self.responded_at else None,
+        }
+
+
+class Conversation(db.Model):
+    """
+    A 1-on-1 conversation between two users.
+    """
+    __tablename__ = "conversations"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id1 = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    user_id2 = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user1 = db.relationship("User", foreign_keys=[user_id1])
+    user2 = db.relationship("User", foreign_keys=[user_id2])
+    
+    def to_dict(self):
+        """Serialize conversation to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "userId1": self.user_id1,
+            "userId2": self.user_id2,
+            "user1Name": self.user1.full_name if self.user1 else None,
+            "user2Name": self.user2.full_name if self.user2 else None,
+            "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Message(db.Model):
+    """
+    An individual message in a conversation.
+    """
+    __tablename__ = "messages"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey("conversations.id"), nullable=False)
+    sender_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    read_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    sender = db.relationship("User", foreign_keys=[sender_id])
+    conversation = db.relationship("Conversation", backref="messages")
+    
+    def to_dict(self):
+        """Serialize message to a JSON-safe dictionary."""
+        return {
+            "id": self.id,
+            "conversationId": self.conversation_id,
+            "senderId": self.sender_id,
+            "senderName": self.sender.full_name if self.sender else None,
+            "content": self.content,
+            "readAt": self.read_at.isoformat() if self.read_at else None,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
         }
