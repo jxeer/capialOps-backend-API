@@ -100,7 +100,7 @@ def create_app():
     frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173,http://localhost:3000")
     allowed_origins = [o.strip() for o in frontend_origin.split(",") if o.strip()]
 
-    CORS(app, resources={r"/api/.*": {
+    CORS(app, resources={r"/api/*": {
         "origins": allowed_origins,
         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization", "X-API-Key"],
