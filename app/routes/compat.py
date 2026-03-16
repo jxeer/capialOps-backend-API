@@ -118,6 +118,24 @@ def backend_status():
     })
 
 
+
+# ---------------------------------------------------------------------------
+# User (from session) - for GUI compatibility
+# ---------------------------------------------------------------------------
+
+@compat_bp.route("/user", methods=["GET"])
+def get_user():
+    """Return the current authenticated user from the session."""
+    from flask import session
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"message": "Authentication required"}), 401
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify(user.to_dict())
+
 # ---------------------------------------------------------------------------
 # Dashboard Stats
 # ---------------------------------------------------------------------------
@@ -874,18 +892,19 @@ def upload_file():
     """
     Handle file uploads (images for profile avatars).
     
+    For production with AWS S3 configured, uploads to S3.
+    For local development without AWS credentials, returns a mock URL.
+    
     Required headers:
         X-API-Key: <compat_api_key>
     
     Required form-data:
         file: <image file>
         path: "avatars/user-id/timestamp-filename.jpg"
-        contentType: "image/jpeg"
-        fileName: "original.jpg"
     
     Returns:
         {
-            "url": "https://bucket.s3.amazonaws.com/avatars/...",
+            "url": "https://bucket.s3.amazonaws.com/avatars/..." or mock URL
             "key": "avatars/user-id/timestamp-filename.jpg"
         }
     """
@@ -904,14 +923,19 @@ def upload_file():
         return jsonify({"error": "File and path are required"}), 400
     
     bucket_name = os.environ.get("AWS_BUCKET_NAME")
-    if not bucket_name:
-        return jsonify({"error": "AWS_BUCKET_NAME not configured"}), 500
+    access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    
+    # For local development without AWS credentials, return a mock URL
+    if not bucket_name or not access_key or not secret_key:
+        url = f"http://localhost:3001/uploads/{path.split('/')[-1]}"
+        return jsonify({"url": url, "key": path}), 201
     
     try:
         s3 = boto3.client(
             "s3",
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
             region_name=os.environ.get("AWS_REGION", "us-east-1")
         )
         
@@ -921,11 +945,6 @@ def upload_file():
         return jsonify({"url": url, "key": path}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-# ---------------------------------------------------------------------------
-# Connection & Messaging API (Phase 4)
-# ---------------------------------------------------------------------------
 
 @compat_bp.route("/connection-requests", methods=["GET"])
 @_require_api_key

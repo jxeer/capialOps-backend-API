@@ -23,6 +23,11 @@ by other modules (e.g., `from app import db`).
 """
 
 import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 from datetime import timedelta
 from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
