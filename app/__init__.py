@@ -165,6 +165,8 @@ def create_app():
     # All routes are versioned under /api/v1/ and return JSON only.
 
     from app.routes.auth import auth_bp
+    from app.routes.google_auth import google_auth_bp
+    from app.routes.uploads import uploads_bp
     from app.routes.dashboard import dashboard_bp
     from app.routes.capital import capital_bp
     from app.routes.execution import execution_bp
@@ -172,6 +174,10 @@ def create_app():
     from app.routes.compat import compat_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
+    # Google Sign-In endpoint — registered alongside auth_bp under /api/v1/auth/
+    app.register_blueprint(google_auth_bp, url_prefix="/api/v1/auth")
+    # Image upload — stores avatars as base64 data URLs in the DB (no S3 needed)
+    app.register_blueprint(uploads_bp, url_prefix="/api/v1/upload")
     app.register_blueprint(dashboard_bp, url_prefix="/api/v1/dashboard")
     app.register_blueprint(capital_bp, url_prefix="/api/v1/capital")
     app.register_blueprint(execution_bp, url_prefix="/api/v1/execution")
@@ -195,6 +201,55 @@ def create_app():
     with app.app_context():
         # Create all tables defined by SQLAlchemy models (safe to call repeatedly)
         db.create_all()
+
+        # --- Schema Migrations ---
+        # Add any columns that exist in the model but may be missing from an older DB.
+        # Each migration is guarded by a column existence check so it's safe to run repeatedly.
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        user_cols = {col["name"] for col in inspector.get_columns("users")}
+
+        # All column migrations for the users table as (column_name, DDL fragment) tuples.
+        # These are applied in order; each is skipped if the column already exists.
+        user_migrations = [
+            ("google_id",              "VARCHAR(255) UNIQUE"),
+            ("profile_type",           "VARCHAR(20)"),
+            ("profile_status",         "VARCHAR(20) DEFAULT 'pending'"),
+            ("title",                  "VARCHAR(100)"),
+            ("organization",           "VARCHAR(200)"),
+            ("linked_in_url",          "VARCHAR(500)"),
+            ("bio",                    "TEXT"),
+            ("profile_image",          "VARCHAR(500)"),
+            ("geographic_focus",       "VARCHAR(200)"),
+            ("investment_stage",       "VARCHAR(100)"),
+            ("target_return",          "VARCHAR(100)"),
+            ("check_size_min",         "NUMERIC(15,2)"),
+            ("check_size_max",         "NUMERIC(15,2)"),
+            ("risk_tolerance",         "VARCHAR(20)"),
+            ("strategic_interest",     "VARCHAR(100)"),
+            ("service_types",          "VARCHAR(200)"),
+            ("geographic_service_area","VARCHAR(200)"),
+            ("years_of_experience",    "VARCHAR(50)"),
+            ("certifications",         "TEXT"),
+            ("average_project_size",   "NUMERIC(15,2)"),
+            ("development_focus",      "VARCHAR(100)"),
+            ("development_type",       "VARCHAR(100)"),
+            ("team_size",              "INTEGER"),
+            ("portfolio_value",        "NUMERIC(15,2)"),
+        ]
+        for col_name, col_def in user_migrations:
+            if col_name not in user_cols:
+                db.session.execute(text(
+                    f"ALTER TABLE users ADD COLUMN {col_name} {col_def}"
+                ))
+
+        # Make password_hash nullable to support Google-only accounts (no password set)
+        if "password_hash" in user_cols:
+            db.session.execute(text(
+                "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL"
+            ))
+
+        db.session.commit()
 
         # Auto-seed demo data in development environments only.
         # Never seeds when FLASK_ENV=production — this is the hard safety guard.

@@ -44,6 +44,7 @@ from app import db
 from app.models import (
     Portfolio, Asset, Project, Deal, Investor,
     Allocation, Milestone, Vendor, WorkOrder, RiskFlag, User,
+    ConnectionRequest, Conversation, Message,
 )
 
 compat_bp = Blueprint("compat", __name__)
@@ -915,52 +916,48 @@ def delete_risk_flag(rf_id):
 @cross_origin(origin="*", methods=["POST"], allow_headers=["Content-Type", "Authorization", "X-API-Key"], supports_credentials=True)
 @_require_api_key
 def upload_file():
+    """Handle file uploads for profile avatars.
+
+    Accepts a multipart 'file' field. Converts the image to a base64 data URL
+    and stores it directly in the database — no S3 or external storage required.
+    If a 'userId' form field is provided, the data URL is persisted to that
+    user's profile_image column immediately.
+
+    Returns (201): { "url": "<data_url>", "key": "<path>" }
     """
-    Handle file uploads (images for profile avatars).
-    
-    For local development, saves files to app/uploads/ directory.
-    For production with AWS S3 configured, uploads to S3.
-    """
-    import boto3
-    from flask import current_app
-    import os
-    
+    import base64
+    import io
+    from app.routes.uploads import _image_to_data_url, MAX_UPLOAD_BYTES
+
     file = request.files.get("file")
-    path = request.form.get("path")
-    
-    if not file or not path:
-        return jsonify({"error": "File and path are required"}), 400
-    
-    bucket_name = os.environ.get("AWS_BUCKET_NAME")
-    access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-    
-    # For local development without AWS credentials, save to disk
-    if not bucket_name or not access_key or not secret_key:
-        upload_dir = os.path.join(current_app.root_path, "uploads")
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        filename = path.split("/")[-1]
-        filepath = os.path.join(upload_dir, filename)
-        file.save(filepath)
-        
-        url = f"http://localhost:3001/uploads/{filename}"
-        return jsonify({"url": url, "key": path}), 201
-    
-    try:
-        s3 = boto3.client(
-            "s3",
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            region_name=os.environ.get("AWS_REGION", "us-east-1")
-        )
-        
-        s3.upload_fileobj(file, bucket_name, path)
-        
-        url = f"https://{bucket_name}.s3.amazonaws.com/{path}"
-        return jsonify({"url": url, "key": path}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    path = request.form.get("path", "avatar")
+    user_id = request.form.get("userId")
+
+    if not file:
+        return jsonify({"error": "File is required"}), 400
+
+    # Read and validate size
+    file_data = file.read()
+    if not file_data:
+        return jsonify({"error": "Empty file received"}), 400
+    if len(file_data) > MAX_UPLOAD_BYTES:
+        return jsonify({"error": f"File too large. Maximum size is {MAX_UPLOAD_BYTES // (1024*1024)} MB"}), 400
+
+    # Convert to base64 data URL (no S3 needed)
+    mime_type = file.content_type or "image/jpeg"
+    data_url = _image_to_data_url(file_data, mime_type)
+
+    # Persist to user's profile_image if userId provided
+    if user_id:
+        try:
+            user = User.query.get(int(user_id))
+            if user:
+                user.profile_image = data_url
+                db.session.commit()
+        except Exception:
+            pass  # Non-fatal — still return the URL
+
+    return jsonify({"url": data_url, "key": path}), 201
 
 @compat_bp.route("/connection-requests", methods=["GET"])
 @_require_api_key

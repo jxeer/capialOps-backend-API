@@ -46,10 +46,11 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)  # Werkzeug-hashed password
+    password_hash = db.Column(db.String(256), nullable=True)   # Werkzeug-hashed password (nullable for Google-only accounts)
     role = db.Column(db.String(50), nullable=False)            # Role key from ROLE_PERMISSIONS
     full_name = db.Column(db.String(150))                      # Display name for the UI
-    
+    google_id = db.Column(db.String(255), unique=True, nullable=True)  # Google OAuth subject ID (set when user signs in via Google)
+
     # Profile fields (Phase 4 - Profile Enhancement)
     profile_type = db.Column(db.String(20))                    # "investor", "vendor", "developer"
     profile_status = db.Column(db.String(20), default="pending")  # "pending", "active", "inactive", "suspended"
@@ -89,7 +90,12 @@ class User(db.Model):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        """Verify a plaintext password against the stored hash."""
+        """Verify a plaintext password against the stored hash.
+
+        Returns False if the user has no password hash (Google-only account).
+        """
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
 
     # Maps each role to a list of permission keys.
@@ -129,7 +135,9 @@ class User(db.Model):
             "role": self.role,
             "role_display": self.role_display,
             "full_name": self.full_name,
-            
+            "google_id": self.google_id,
+            "has_password": self.password_hash is not None,
+
             # Profile fields (Phase 4)
             "profileType": self.profile_type,
             "profileStatus": self.profile_status,
