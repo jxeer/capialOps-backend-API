@@ -181,6 +181,15 @@ def create_app():
     # the response format expected by the frontend GUI's Express proxy.
     # No JWT required (server-to-server calls from the GUI's Express server).
     app.register_blueprint(compat_bp, url_prefix="/api")
+    
+    # Serve static files from uploads directory for uploaded images
+    from flask import send_from_directory
+    uploads_dir = os.path.join(app.root_path, "uploads")
+    
+    @app.route("/uploads/<path:filename>")
+    def serve_upload(filename):
+        """Serve uploaded image files from the uploads directory."""
+        return send_from_directory(uploads_dir, filename)
 
     # --- Database Initialization ---
     with app.app_context():
@@ -191,6 +200,7 @@ def create_app():
         # Never seeds when FLASK_ENV=production — this is the hard safety guard.
         # In non-production, seeds when FLASK_ENV=development or inside a Replit
         # dev workspace (REPL_SLUG / REPLIT_DEV_DOMAIN set automatically).
+        # DISABLE_SEED environment variable can be set to skip seeding.
         flask_env = os.environ.get("FLASK_ENV", "").lower()
         is_production = flask_env == "production"
         is_dev = (
@@ -201,7 +211,8 @@ def create_app():
                 or os.environ.get("REPLIT_DEV_DOMAIN")
             )
         )
-        if is_dev:
+        skip_seed = os.environ.get("DISABLE_SEED", "").lower() in ("1", "true", "yes")
+        if is_dev and not skip_seed:
             seed_demo_data()
 
     # --- CLI Commands ---

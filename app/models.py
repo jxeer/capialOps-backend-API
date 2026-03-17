@@ -58,6 +58,8 @@ class User(db.Model):
     linked_in_url = db.Column(db.String(500))
     bio = db.Column(db.Text)
     
+    profile_image = db.Column(db.String(500))
+    
     # Investor-specific fields
     geographic_focus = db.Column(db.String(200))
     investment_stage = db.Column(db.String(100))
@@ -135,6 +137,7 @@ class User(db.Model):
             "organization": self.organization,
             "linkedInUrl": self.linked_in_url,
             "bio": self.bio,
+            "profileImage": self.profile_image,
             
             # Investor-specific
             "geographicFocus": self.geographic_focus,

@@ -139,6 +139,28 @@ def get_user():
         return jsonify({"error": "User not found"}), 404
     return jsonify(user.to_dict())
 
+
+@compat_bp.route("/user", methods=["PUT"])
+@_require_api_key
+def update_user_profile():
+    """Update the current user's profile, including profile image."""
+    from flask import session
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"message": "Authentication required"}), 401
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    data = request.get_json() or {}
+    
+    if "profileImage" in data:
+        user.profile_image = data["profileImage"]
+    
+    db.session.commit()
+    return jsonify(user.to_dict())
+
 # ---------------------------------------------------------------------------
 # Dashboard Stats
 # ---------------------------------------------------------------------------
@@ -896,29 +918,12 @@ def upload_file():
     """
     Handle file uploads (images for profile avatars).
     
+    For local development, saves files to app/uploads/ directory.
     For production with AWS S3 configured, uploads to S3.
-    For local development without AWS credentials, returns a mock URL.
-    
-    Required headers:
-        X-API-Key: <compat_api_key>
-    
-    Required form-data:
-        file: <image file>
-        path: "avatars/user-id/timestamp-filename.jpg"
-    
-    Returns:
-        {
-            "url": "https://bucket.s3.amazonaws.com/avatars/..." or mock URL
-            "key": "avatars/user-id/timestamp-filename.jpg"
-        }
     """
     import boto3
-    
-    api_key = os.environ.get("COMPAT_API_KEY")
-    if api_key:
-        provided = request.headers.get("X-API-Key", "")
-        if provided != api_key:
-            return jsonify({"error": "Invalid or missing API key"}), 403
+    from flask import current_app
+    import os
     
     file = request.files.get("file")
     path = request.form.get("path")
@@ -930,9 +935,16 @@ def upload_file():
     access_key = os.environ.get("AWS_ACCESS_KEY_ID")
     secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
     
-    # For local development without AWS credentials, return a mock URL
+    # For local development without AWS credentials, save to disk
     if not bucket_name or not access_key or not secret_key:
-        url = f"http://localhost:3001/uploads/{path.split('/')[-1]}"
+        upload_dir = os.path.join(current_app.root_path, "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        filename = path.split("/")[-1]
+        filepath = os.path.join(upload_dir, filename)
+        file.save(filepath)
+        
+        url = f"http://localhost:3001/uploads/{filename}"
         return jsonify({"url": url, "key": path}), 201
     
     try:
