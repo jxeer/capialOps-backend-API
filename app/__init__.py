@@ -249,6 +249,35 @@ def create_app():
                 "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL"
             ))
 
+        # --- work_orders table migrations ---
+        # Phase 4 added description and photo_url; older production DBs may be missing them.
+        if inspector.has_table("work_orders"):
+            wo_cols = {col["name"] for col in inspector.get_columns("work_orders")}
+            work_order_migrations = [
+                ("description", "TEXT"),
+                ("photo_url",   "VARCHAR(500)"),
+                ("created_at",  "TIMESTAMP DEFAULT NOW()"),
+            ]
+            for col_name, col_def in work_order_migrations:
+                if col_name not in wo_cols:
+                    db.session.execute(text(
+                        f"ALTER TABLE work_orders ADD COLUMN {col_name} {col_def}"
+                    ))
+
+        # --- risk_flags table migrations ---
+        # resolved_at was added in Phase 4; guard it the same way.
+        if inspector.has_table("risk_flags"):
+            rf_cols = {col["name"] for col in inspector.get_columns("risk_flags")}
+            risk_flag_migrations = [
+                ("resolved_at", "TIMESTAMP"),
+                ("created_at",  "TIMESTAMP DEFAULT NOW()"),
+            ]
+            for col_name, col_def in risk_flag_migrations:
+                if col_name not in rf_cols:
+                    db.session.execute(text(
+                        f"ALTER TABLE risk_flags ADD COLUMN {col_name} {col_def}"
+                    ))
+
         db.session.commit()
 
         # Auto-seed demo data in development environments only.
