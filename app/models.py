@@ -221,6 +221,9 @@ class Asset(db.Model):
     status = db.Column(db.String(50))                        # Pre-dev, Active, or Stabilized
     asset_manager = db.Column(db.String(150))                # Name of assigned asset manager
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Media: JSON array of {url, type, name} objects (base64 data URLs or external URLs)
+    media = db.Column(db.JSON, default=list)
 
     # One asset can have multiple development projects
     projects = db.relationship("Project", backref="asset", lazy=True)
@@ -239,6 +242,7 @@ class Asset(db.Model):
             "status": self.status,
             "asset_manager": self.asset_manager,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "media": self.media or [],
         }
 
 
@@ -263,6 +267,9 @@ class Project(db.Model):
     status = db.Column(db.String(50))           # On Track, At Risk, Complete, etc.
     pm_assigned = db.Column(db.String(150))     # Name of assigned project manager
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Media: JSON array of {url, type, name} objects (base64 data URLs or external URLs)
+    media = db.Column(db.JSON, default=list)
 
     # One project can have multiple deals (capital raise structures)
     deals = db.relationship("Deal", backref="project", lazy=True)
@@ -284,6 +291,7 @@ class Project(db.Model):
             "status": self.status,
             "pm_assigned": self.pm_assigned,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "media": self.media or [],
         }
 
 

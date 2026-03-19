@@ -1,7 +1,7 @@
 [project]
-name = "python-template"
+name = "capitalops-backend"
 version = "0.1.0"
-description = ""
+description = "Capital + Governance Operating Layer API"
 authors = ["Your Name <you@example.com>"]
 requires-python = ">=3.11"
 dependencies = [
@@ -16,3 +16,8 @@ dependencies = [
     "pyjwt>=2.11.0",
     "werkzeug>=3.1.6",
 ]
+
+[tool.gunicorn]
+bind = "0.0.0.0:3001"
+workers = 2
+timeout = 120

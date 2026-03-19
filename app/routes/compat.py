@@ -250,6 +250,7 @@ def create_asset():
         square_footage=data.get("squareFootage", 0),
         status=data.get("status", "Pre-dev"),
         asset_manager=data.get("assetManager", ""),
+        media=data.get("media", []),
     )
     db.session.add(asset)
     db.session.commit()
@@ -297,6 +298,7 @@ def create_project():
         budget_actual=data.get("budgetActual", 0),
         status=data.get("status", "Planning"),
         pm_assigned=data.get("pmAssigned", ""),
+        media=data.get("media", []),
     )
     db.session.add(project)
     db.session.commit()
@@ -617,6 +619,7 @@ def update_asset(asset_id):
     if "squareFootage" in data: asset.square_footage = data["squareFootage"]
     if "status" in data: asset.status = data["status"]
     if "assetManager" in data: asset.asset_manager = data["assetManager"]
+    if "media" in data: asset.media = data["media"]
     db.session.commit()
     return jsonify(_to_gui(asset.to_dict()))
 
@@ -648,6 +651,7 @@ def update_project(project_id):
     if "budgetActual" in data: project.budget_actual = data["budgetActual"]
     if "status" in data: project.status = data["status"]
     if "pmAssigned" in data: project.pm_assigned = data["pmAssigned"]
+    if "media" in data: project.media = data["media"]
     db.session.commit()
     return jsonify(_to_gui(project.to_dict()))
 
@@ -1262,3 +1266,65 @@ def update_user(user_id):
     
     db.session.commit()
     return jsonify(_to_gui(user.to_dict()))
+
+
+@compat_bp.route("/upload", methods=["POST"])
+@_require_api_key
+def upload_media():
+    """Upload a media file and return a base64 data URL.
+
+    Accepts either:
+    - multipart/form-data with an 'image' field
+    - JSON body with 'imageData' field containing base64-encoded image
+
+    Returns {url: "data:image/...;base64,..."} for direct use in img src.
+    """
+    import base64
+    import io
+
+    # Handle JSON body with base64 image
+    if request.is_json:
+        data = request.get_json() or {}
+        image_data = data.get("imageData")
+        if not image_data:
+            return jsonify({"error": "No image provided"}), 400
+
+        # Decode base64
+        try:
+            if image_data.startswith("data:"):
+                header, encoded = image_data.split(",", 1)
+                mime_type = header.split(";")[0].replace("data:", "") or "image/jpeg"
+                file_data = base64.b64decode(encoded)
+            else:
+                file_data = base64.b64decode(image_data)
+                mime_type = "image/jpeg"
+        except Exception:
+            return jsonify({"error": "Invalid base64 data"}), 400
+
+        if len(file_data) > 5 * 1024 * 1024:
+            return jsonify({"error": "File too large (max 5MB)"}), 400
+
+        encoded_result = base64.b64encode(file_data).decode("utf-8")
+        data_url = f"data:{mime_type};base64,{encoded_result}"
+        return jsonify({"url": data_url, "key": data.get("name", "image")})
+
+    # Handle multipart form data
+    if "image" not in request.files:
+        return jsonify({"error": "No image provided"}), 400
+
+    file = request.files["image"]
+    if not file.filename:
+        return jsonify({"error": "Empty file"}), 400
+
+    file_data = file.read()
+    if len(file_data) > 5 * 1024 * 1024:
+        return jsonify({"error": "File too large (max 5MB)"}), 400
+
+    mime_type = file.content_type or "image/jpeg"
+    if not mime_type.startswith("image/"):
+        return jsonify({"error": "Only image files allowed"}), 400
+
+    encoded = base64.b64encode(file_data).decode("utf-8")
+    data_url = f"data:{mime_type};base64,{encoded}"
+
+    return jsonify({"url": data_url, "key": file.filename or "image"})
