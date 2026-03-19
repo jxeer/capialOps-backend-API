@@ -113,13 +113,91 @@ from flask_cors import cross_origin
 
 @compat_bp.route("/backend-status", methods=["GET"])
 def backend_status():
-    """Return backend connectivity info for the GUI's status badge."""
+    """Health check endpoint for the frontend to verify backend connectivity."""
     return jsonify({
+        "service": "capitalops-api",
+        "status": "ok",
         "connected": True,
-        "url": request.host_url.rstrip("/"),
         "mode": "live",
-        "backendInfo": {"status": "ok", "service": "capitalops-api"},
+        "url": request.url_root,
     })
+
+
+@compat_bp.route("/login", methods=["POST"])
+@_require_api_key
+def compat_login():
+    """Authenticate user and return JWT token (same as /api/v1/auth/login)."""
+    from flask_jwt_extended import create_access_token
+
+    data = request.get_json() or {}
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"message": "Username and password required"}), 400
+
+    user = User.query.filter_by(username=username).first()
+    if not user or not user.check_password(password):
+        return jsonify({"message": "Invalid credentials"}), 401
+
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"role": user.role},
+    )
+
+    return jsonify({
+        "accessToken": access_token,
+        "user": user.to_dict(),
+    })
+
+
+@compat_bp.route("/register", methods=["POST"])
+@_require_api_key
+def compat_register():
+    """Create a new user account."""
+    from flask_jwt_extended import create_access_token
+
+    data = request.get_json() or {}
+    username = data.get("username")
+    password = data.get("password")
+    email = data.get("email")
+    full_name = data.get("fullName") or data.get("full_name")
+
+    if not username or not password:
+        return jsonify({"message": "Username and password required"}), 400
+
+    # Check if user exists
+    existing = User.query.filter_by(username=username).first()
+    if existing:
+        return jsonify({"message": "Username already exists"}), 409
+
+    if email:
+        existing_email = User.query.filter_by(email=email).first()
+        if existing_email:
+            return jsonify({"message": "Email already exists"}), 409
+
+    # Create new user
+    user = User(
+        username=username,
+        email=email or f"{username}@example.com",
+        full_name=full_name or username,
+        role="investor_tier1",
+    )
+    user.set_password(password)
+
+    db.session.add(user)
+    db.session.commit()
+
+    # Create token
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"role": user.role},
+    )
+
+    return jsonify({
+        "accessToken": access_token,
+        "user": user.to_dict(),
+    }), 201
 
 
 
