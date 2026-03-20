@@ -178,6 +178,75 @@ def setup_admin():
     }), 201
 
 
+@compat_bp.route("/seed", methods=["POST"])
+def trigger_seed():
+    """Manually trigger seed data (portfolios, assets, projects, etc).
+    Use after /setup-admin to populate demo data.
+    """
+    from app.models import Portfolio, Asset, Project, Deal, Milestone, Vendor, WorkOrder, Investor, Allocation, RiskFlag
+
+    # Check if seed data already exists
+    if Portfolio.query.first() and Asset.query.first() and Project.query.first():
+        return jsonify({
+            "message": "Seed data already exists",
+            "portfolios": Portfolio.query.count(),
+            "assets": Asset.query.count(),
+            "projects": Project.query.count(),
+        })
+
+    # Get admin user for relations
+    admin = User.query.filter_by(username="admin").first()
+    if not admin:
+        return jsonify({"error": "Admin user not found. Run /setup-admin first."}), 400
+
+    # Create Demo Portfolio
+    portfolio = Portfolio(
+        name="CapitalOps Premier Fund",
+        description="Diversified real estate development portfolio targeting 18-22% IRR across multifamily, mixed-use, and commercial projects in high-growth US markets.",
+        total_value=50000000,
+        committed_capital=35000000,
+        available_capital=15000000,
+        deployment_period="2024-2027",
+        status="Active",
+    )
+    db.session.add(portfolio)
+
+    # Create Demo Asset
+    asset = Asset(
+        portfolio=portfolio,
+        name="The Meridian Tower",
+        location="Austin, TX",
+        asset_type="Mixed-Use",
+        square_footage=185000,
+        status="Active",
+        asset_manager="Sarah Chen",
+    )
+    db.session.add(asset)
+
+    # Create Demo Project
+    project = Project(
+        asset=asset,
+        portfolio=portfolio,
+        phase="Construction",
+        start_date="2024-01-15",
+        target_completion="2026-06-30",
+        budget_total=25000000,
+        budget_actual=12500000,
+        status="In Progress",
+        pm_assigned="Michael Torres",
+    )
+    db.session.add(project)
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Seed data created",
+        "portfolio": portfolio.to_dict() if hasattr(portfolio, 'to_dict') else {"id": portfolio.id, "name": portfolio.name},
+        "asset": asset.to_dict() if hasattr(asset, 'to_dict') else {"id": asset.id, "name": asset.name},
+        "project": project.to_dict() if hasattr(project, 'to_dict') else {"id": project.id, "name": project.phase},
+    }), 201
+
+
 @compat_bp.route("/register", methods=["POST"])
 @_require_api_key
 def compat_register():
