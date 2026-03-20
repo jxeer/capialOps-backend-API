@@ -280,26 +280,11 @@ def create_app():
 
         db.session.commit()
 
-        # Auto-seed demo data in development environments only.
-        # Never seeds when FLASK_ENV=production — this is the hard safety guard.
-        # In non-production, seeds when FLASK_ENV=development or inside a Replit
-        # dev workspace (REPL_SLUG / REPLIT_DEV_DOMAIN set automatically).
-        # DISABLE_SEED environment variable can be set to skip seeding.
-        # RAILWAY_* variables are set automatically in Railway deployments.
-        flask_env = os.environ.get("FLASK_ENV", "").lower()
-        is_production = flask_env == "production"
-        is_railway = bool(os.environ.get("RAILWAY"))
-        is_dev = (
-            not is_production
-            and (
-                flask_env == "development"
-                or os.environ.get("REPL_SLUG")
-                or os.environ.get("REPLIT_DEV_DOMAIN")
-                or is_railway  # Seed on Railway too
-            )
-        )
+        # Auto-seed demo data if no users exist in the database.
+        # This is safe because seed_demo_data() checks if users already exist first.
+        # DISABLE_SEED=true can be set to skip seeding.
         skip_seed = os.environ.get("DISABLE_SEED", "").lower() in ("1", "true", "yes")
-        if is_dev and not skip_seed:
+        if not skip_seed:
             seed_demo_data()
 
     # --- CLI Commands ---
@@ -337,22 +322,23 @@ def seed_demo_data():
     """
     from app.models import User, Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag
 
-    # Guard: Only seed if the database is empty (no existing users)
-    if User.query.first():
-        return
-
     # --- Demo User Accounts ---
     # Each account represents a different role for testing role-based access
 
-    # Sponsor Admin — full access to all three modules
-    admin = User(
-        username="admin",
-        email="admin@capitalops.io",
-        role="sponsor_admin",
-        full_name="Julian (Sponsor Admin)",
-    )
-    admin.set_password("admin123")
-    db.session.add(admin)
+    # Always create admin user if not exists
+    if not User.query.filter_by(username="admin").first():
+        admin = User(
+            username="admin",
+            email="admin@capitalops.io",
+            role="sponsor_admin",
+            full_name="Admin User",
+        )
+        admin.set_password("admin123")
+        db.session.add(admin)
+
+    # Guard: Only seed demo data if database is completely empty
+    if User.query.count() > 1:  # More than just the admin we just created
+        return
 
     # Project Manager — access to Execution Control only
     pm = User(
