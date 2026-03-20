@@ -54,6 +54,40 @@ def google_status():
     })
 
 
+@google_auth_bp.route("/google", methods=["GET"])
+def google_redirect():
+    """Redirect to Google's OAuth consent page.
+    
+    Redirects to:
+    https://accounts.google.com/o/oauth2/v2/auth?
+        client_id=GOOGLE_OAUTH_CLIENT_ID
+        &redirect_uri=backend_url/api/v1/auth/google/callback
+        &response_type=code
+        &scope=openid%20email%20profile
+        &access_type=offline
+    """
+    import urllib.parse
+    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    if not client_id:
+        return jsonify({"error": "Google OAuth not configured"}), 400
+    
+    backend_url = request.url_root.rstrip("/")
+    redirect_uri = f"{backend_url}/api/v1/auth/google/callback"
+    
+    params = urllib.parse.urlencode({
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account",
+    })
+    
+    return jsonify({
+        "authUrl": f"https://accounts.google.com/o/oauth2/v2/auth?{params}"
+    })
+
+
 @google_auth_bp.route("/google", methods=["POST"])
 def google_login():
     """
