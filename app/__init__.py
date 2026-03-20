@@ -285,14 +285,17 @@ def create_app():
         # In non-production, seeds when FLASK_ENV=development or inside a Replit
         # dev workspace (REPL_SLUG / REPLIT_DEV_DOMAIN set automatically).
         # DISABLE_SEED environment variable can be set to skip seeding.
+        # RAILWAY_* variables are set automatically in Railway deployments.
         flask_env = os.environ.get("FLASK_ENV", "").lower()
         is_production = flask_env == "production"
+        is_railway = bool(os.environ.get("RAILWAY"))
         is_dev = (
             not is_production
             and (
                 flask_env == "development"
                 or os.environ.get("REPL_SLUG")
                 or os.environ.get("REPLIT_DEV_DOMAIN")
+                or is_railway  # Seed on Railway too
             )
         )
         skip_seed = os.environ.get("DISABLE_SEED", "").lower() in ("1", "true", "yes")
