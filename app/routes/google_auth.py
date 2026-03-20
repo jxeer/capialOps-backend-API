@@ -44,6 +44,16 @@ google_auth_bp = Blueprint("google_auth", __name__)
 DEFAULT_GOOGLE_USER_ROLE = "investor_tier1"
 
 
+@google_auth_bp.route("/status", methods=["GET"])
+def google_status():
+    """Check if Google OAuth is configured and enabled."""
+    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    return jsonify({
+        "enabled": bool(client_id),
+        "configured": bool(client_id),
+    })
+
+
 @google_auth_bp.route("/google", methods=["POST"])
 def google_login():
     """
