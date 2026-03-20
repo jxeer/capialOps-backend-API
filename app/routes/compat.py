@@ -198,33 +198,41 @@ def cleanup_seed():
     """
     from app.models import Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag, User
     
-    # Delete non-essential users (keep admin and julian.xeer@gmail.com)
-    kept_users = User.query.filter(
-        User.username.in_(["admin", "pm", "gc"]),
-        User.email.notin_(["admin@capitalops.io", "julian.xeer@gmail.com"])
-    ).all()
-    
     deleted_users = []
-    for u in kept_users:
-        deleted_users.append(u.username)
-        db.session.delete(u)
+    # Delete pm and gc users
+    for u in User.query.all():
+        if u.username in ["pm", "gc"]:
+            deleted_users.append(u.username)
+            db.session.delete(u)
     
-    # Delete seed data
-    deleted_portfolios = Portfolio.query.filter(Portfolio.name != "Core Portfolio").all()
-    for p in deleted_portfolios:
+    # Delete all seed data
+    for p in Portfolio.query.all():
         db.session.delete(p)
-    
-    # Also clean up Core Portfolio if it has seed data
-    core = Portfolio.query.filter_by(name="Core Portfolio").first()
-    if core:
-        db.session.delete(core)
+    for a in Asset.query.all():
+        db.session.delete(a)
+    for proj in Project.query.all():
+        db.session.delete(proj)
+    for d in Deal.query.all():
+        db.session.delete(d)
+    for i in Investor.query.all():
+        db.session.delete(i)
+    for al in Allocation.query.all():
+        db.session.delete(al)
+    for m in Milestone.query.all():
+        db.session.delete(m)
+    for v in Vendor.query.all():
+        db.session.delete(v)
+    for w in WorkOrder.query.all():
+        db.session.delete(w)
+    for r in RiskFlag.query.all():
+        db.session.delete(r)
     
     db.session.commit()
     
     return jsonify({
         "message": "Cleanup complete",
         "deleted_users": deleted_users,
-        "deleted_portfolios": [p.name for p in deleted_portfolios],
+        "remaining_users": [u.username for u in User.query.all()],
     })
 
 
