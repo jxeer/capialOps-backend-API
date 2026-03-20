@@ -175,8 +175,7 @@ def create_app():
     from app.routes.compat import compat_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
-    # Google Sign-In endpoint — registered alongside auth_bp under /api/v1/auth/
-    app.register_blueprint(google_auth_bp, url_prefix="/api/v1/auth")
+    app.register_blueprint(google_auth_bp, url_prefix="/api/v1/auth/google")
     # Image upload — stores avatars as base64 data URLs in the DB (no S3 needed)
     app.register_blueprint(uploads_bp, url_prefix="/api/v1/upload")
     app.register_blueprint(dashboard_bp, url_prefix="/api/v1/dashboard")
