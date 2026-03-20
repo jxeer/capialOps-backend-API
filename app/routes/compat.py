@@ -860,7 +860,12 @@ def update_project(project_id):
     if "budgetActual" in data: project.budget_actual = data["budgetActual"]
     if "status" in data: project.status = data["status"]
     if "pmAssigned" in data: project.pm_assigned = data["pmAssigned"]
-    if "media" in data: project.media = data["media"]
+    if "media" in data:
+        media_val = data["media"]
+        if isinstance(media_val, str):
+            import json
+            media_val = json.loads(media_val)
+        project.media = media_val
     db.session.commit()
     return jsonify(_to_gui(project.to_dict()))
 
