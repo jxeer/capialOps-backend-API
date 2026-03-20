@@ -224,30 +224,16 @@ def google_callback():
     # Create JWT
     access_token = create_access_token(identity=str(user.id), additional_claims={"role": user.role})
     
-    # Redirect back to frontend with token via postMessage (for OAuth popup flow)
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <body>
-    <script>
-      window.opener.postMessage({{
-        type: 'GOOGLE_AUTH_SUCCESS',
-        accessToken: '{access_token}',
-        user: {{
-          id: {user.id},
-          username: '{user.username}',
-          email: '{user.email}',
-          fullName: '{user.full_name or ''}',
-          role: '{user.role}'
-        }},
-        isNewUser: {str(is_new_user).lower()}
-      }}, '*');
-      window.close();
-    </script>
-    <p>Authentication successful! Closing...</p>
-    </body>
-    </html>
-    """, 200, {'Content-Type': 'text/html'}
+    # Redirect to frontend with token in URL
+    frontend_url = os.environ.get("FRONTEND_ORIGIN", "https://capitalops.vercel.app")
+    if frontend_url == "*":
+        frontend_url = "https://capitalops.vercel.app"
+    
+    import urllib.parse
+    redirect_url = f"{frontend_url}?google_token={access_token}"
+    
+    from flask import redirect
+    return redirect(redirect_url)
 
 
 @google_auth_bp.route("/google", methods=["POST"])
