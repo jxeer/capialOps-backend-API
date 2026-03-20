@@ -151,6 +151,33 @@ def compat_login():
     })
 
 
+@compat_bp.route("/setup-admin", methods=["POST"])
+def setup_admin():
+    """Create admin user if not exists. Use this to bootstrap the app.
+    This endpoint is open but only creates one admin account.
+    """
+    admin = User.query.filter_by(username="admin").first()
+    if admin:
+        return jsonify({"message": "Admin already exists", "user": admin.to_dict()})
+
+    admin = User(
+        username="admin",
+        email="admin@capitalops.io",
+        role="sponsor_admin",
+        full_name="Admin User",
+    )
+    admin.set_password("admin123")
+    db.session.add(admin)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Admin created",
+        "username": "admin",
+        "password": "admin123",
+        "user": admin.to_dict(),
+    }), 201
+
+
 @compat_bp.route("/register", methods=["POST"])
 @_require_api_key
 def compat_register():
