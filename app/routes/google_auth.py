@@ -108,6 +108,148 @@ def google_redirect():
     })
 
 
+@google_auth_bp.route("/callback", methods=["GET"])
+def google_callback():
+    """Handle the OAuth callback from Google.
+    
+    Google redirects here with ?code=xxx after user consents.
+    We exchange the code for tokens and redirect to frontend with the token.
+    """
+    import urllib.parse
+    code = request.args.get("code")
+    error = request.args.get("error")
+    
+    if error:
+        return f"<script>window.opener.postMessage({{error: '{error}'}}, '*'); window.close();</script>", 400
+    
+    if not code:
+        return f"<script>window.opener.postMessage({{error: 'No authorization code'}}, '*'); window.close();</script>", 400
+    
+    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+    
+    if not client_secret:
+        return f"<script>window.opener.postMessage({{error: 'Google OAuth not fully configured'}}, '*'); window.close();</script>", 500
+    
+    # Get the redirect_uri we used in the original request
+    railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+    if railway_domain:
+        backend_url = f"https://{railway_domain}"
+    else:
+        backend_url = request.url_root.rstrip("/")
+    redirect_uri = backend_url.replace("http://", "https://") + "/api/v1/auth/google/callback"
+    
+    # Exchange code for tokens
+    token_url = "https://oauth2.googleapis.com/token"
+    token_data = {
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+    }
+    
+    import requests as req
+    try:
+        token_resp = req.post(token_url, data=token_data, timeout=30)
+        token_json = token_resp.json()
+    except Exception as e:
+        msg = str(e)
+        return f"<script>window.opener.postMessage({{error: 'Failed: {msg}'}}, '*'); window.close();</script>", 500
+    
+    if token_resp.status_code != 200:
+        return f"<script>window.opener.postMessage({{error: 'Token exchange failed'}}, '*'); window.close();</script>", 400
+    
+    id_token = token_json.get("id_token")
+    if not id_token:
+        return f"<script>window.opener.postMessage({{error: 'No id_token'}}, '*'); window.close();</script>", 400
+    
+    # Verify and decode the id_token
+    from google.oauth2 import id_token as google_id_token
+    from google.auth.transport import requests as google_requests
+    
+    try:
+        idinfo = google_id_token.verify_oauth2_token(id_token, google_requests.Request(), client_id)
+    except ValueError as e:
+        msg = str(e)
+        return f"<script>window.opener.postMessage({{error: 'Invalid token: {msg}'}}, '*'); window.close();</script>", 401
+    
+    google_sub = idinfo["sub"]
+    email = idinfo.get("email", "")
+    email_verified = idinfo.get("email_verified", False)
+    given_name = idinfo.get("given_name", "")
+    family_name = idinfo.get("family_name", "")
+    full_name = idinfo.get("name", f"{given_name} {family_name}".strip())
+    
+    if not email_verified:
+        return f"<script>window.opener.postMessage({{error: 'Email not verified'}}, '*'); window.close();</script>", 401
+    
+    # Find or create user
+    from app import db
+    from app.models import User
+    from flask_jwt_extended import create_access_token
+    
+    user = User.query.filter_by(google_id=google_sub).first()
+    is_new_user = False
+    
+    if not user:
+        user = User.query.filter_by(email=email).first()
+        if user:
+            if user.google_id is not None and user.google_id != google_sub:
+                return f"<script>window.opener.postMessage({{error: 'Email conflict'}}, '*'); window.close();</script>", 409
+            user.google_id = google_sub
+            if not user.full_name:
+                user.full_name = full_name
+        else:
+            base_username = email.split("@")[0]
+            username = base_username
+            counter = 1
+            while User.query.filter_by(username=username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            user = User(
+                username=username,
+                email=email,
+                role="investor_tier1",
+                full_name=full_name,
+                google_id=google_sub,
+                password_hash=None,
+            )
+            db.session.add(user)
+            is_new_user = True
+        
+        db.session.commit()
+    
+    # Create JWT
+    access_token = create_access_token(identity=str(user.id), additional_claims={"role": user.role})
+    
+    # Redirect back to frontend with token via postMessage (for OAuth popup flow)
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <body>
+    <script>
+      window.opener.postMessage({{
+        type: 'GOOGLE_AUTH_SUCCESS',
+        accessToken: '{access_token}',
+        user: {{
+          id: {user.id},
+          username: '{user.username}',
+          email: '{user.email}',
+          fullName: '{user.full_name or ''}',
+          role: '{user.role}'
+        }},
+        isNewUser: {str(is_new_user).lower()}
+      }}, '*');
+      window.close();
+    </script>
+    <p>Authentication successful! Closing...</p>
+    </body>
+    </html>
+    """, 200, {'Content-Type': 'text/html'}
+
+
 @google_auth_bp.route("/google", methods=["POST"])
 def google_login():
     """
