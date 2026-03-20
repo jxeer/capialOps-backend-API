@@ -236,7 +236,7 @@ def google_callback():
     return redirect(redirect_url)
 
 
-@google_auth_bp.route("/google", methods=["POST"])
+@google_auth_bp.route("/", methods=["POST"])
 def google_login():
     """
     Verify a Google ID token and return a CapitalOps JWT.
