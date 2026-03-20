@@ -506,6 +506,13 @@ def _get_user_from_request():
     return None
 
 
+def _get_user_portfolio_ids(user):
+    """Get list of portfolio IDs owned by the user."""
+    if not user:
+        return []
+    return [p.id for p in Portfolio.query.filter_by(user_id=user.id).all()]
+
+
 @compat_bp.route("/user", methods=["GET"])
 def get_user():
     """Return the current authenticated user from JWT token or session."""
@@ -542,7 +549,7 @@ def update_user_profile():
 
 @compat_bp.route("/dashboard/stats", methods=["GET"])
 def dashboard_stats():
-    """Return aggregated stats matching the GUI's dashboard stat cards.
+    """Return aggregated stats for the current user's portfolio.
 
     Response shape (camelCase):
         {
@@ -551,12 +558,23 @@ def dashboard_stats():
             openWorkOrders, riskFlags
         }
     """
-    assets = Asset.query.all()
-    projects = Project.query.all()
-    deals = Deal.query.all()
-    investors = Investor.query.all()
-    work_orders = WorkOrder.query.all()
-    risk_flags = RiskFlag.query.filter_by(status="Open").all()
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    
+    if portfolio_ids:
+        assets = Asset.query.filter(Asset.portfolio_id.in_(portfolio_ids)).all()
+        projects = Project.query.filter(Project.portfolio_id.in_(portfolio_ids)).all()
+        deals = Deal.query.filter(Deal.portfolio_id.in_(portfolio_ids)).all()
+        work_orders = WorkOrder.query.filter(WorkOrder.portfolio_id.in_(portfolio_ids)).all()
+        risk_flags = RiskFlag.query.filter(RiskFlag.portfolio_id.in_(portfolio_ids), RiskFlag.status == "Open").all()
+        investors = Investor.query.filter_by(user_id=user.id).all() if user else []
+    else:
+        assets = []
+        projects = []
+        deals = []
+        work_orders = []
+        risk_flags = []
+        investors = []
 
     active_projects = [p for p in projects if p.status not in ("Complete", "Completed", "Closed")]
     active_deals = [d for d in deals if d.status in ("Active", "Open")]
@@ -580,8 +598,13 @@ def dashboard_stats():
 
 @compat_bp.route("/portfolios", methods=["GET"])
 def list_portfolios():
-    """Return all portfolios as a flat array."""
-    portfolios = Portfolio.query.all()
+    """Return all portfolios for the current user as a flat array."""
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    if portfolio_ids:
+        portfolios = Portfolio.query.filter(Portfolio.id.in_(portfolio_ids)).all()
+    else:
+        portfolios = []
     return jsonify([_to_gui(p.to_dict()) for p in portfolios])
 
 
@@ -591,8 +614,13 @@ def list_portfolios():
 
 @compat_bp.route("/assets", methods=["GET"])
 def list_assets():
-    """Return all assets as a flat array."""
-    assets = Asset.query.all()
+    """Return all assets for the current user's portfolio as a flat array."""
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    if portfolio_ids:
+        assets = Asset.query.filter(Asset.portfolio_id.in_(portfolio_ids)).all()
+    else:
+        assets = []
     return jsonify([_to_gui(a.to_dict()) for a in assets])
 
 
@@ -637,8 +665,13 @@ def create_asset():
 
 @compat_bp.route("/projects", methods=["GET"])
 def list_projects():
-    """Return all projects as a flat array."""
-    projects = Project.query.all()
+    """Return all projects for the current user's portfolio as a flat array."""
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    if portfolio_ids:
+        projects = Project.query.filter(Project.portfolio_id.in_(portfolio_ids)).all()
+    else:
+        projects = []
     return jsonify([_to_gui(p.to_dict()) for p in projects])
 
 
@@ -690,8 +723,13 @@ def create_project():
 
 @compat_bp.route("/deals", methods=["GET"])
 def list_deals():
-    """Return all deals as a flat array."""
-    deals = Deal.query.all()
+    """Return all deals for the current user's portfolio as a flat array."""
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    if portfolio_ids:
+        deals = Deal.query.filter(Deal.portfolio_id.in_(portfolio_ids)).all()
+    else:
+        deals = []
     return jsonify([_to_gui(d.to_dict()) for d in deals])
 
 
@@ -738,8 +776,12 @@ def create_deal():
 
 @compat_bp.route("/investors", methods=["GET"])
 def list_investors():
-    """Return all investors as a flat array."""
-    investors = Investor.query.all()
+    """Return all investors for the current user as a flat array."""
+    user = _get_user_from_request()
+    if user:
+        investors = Investor.query.filter_by(user_id=user.id).all()
+    else:
+        investors = []
     return jsonify([_to_gui(i.to_dict()) for i in investors])
 
 
@@ -787,8 +829,15 @@ def create_investor():
 
 @compat_bp.route("/allocations", methods=["GET"])
 def list_allocations():
-    """Return all allocations as a flat array."""
-    allocations = Allocation.query.order_by(Allocation.created_at.desc()).all()
+    """Return all allocations for the current user's portfolio."""
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    if portfolio_ids:
+        # Get allocations for user's deals
+        user_deal_ids = [d.id for d in Deal.query.filter(Deal.portfolio_id.in_(portfolio_ids)).all()]
+        allocations = Allocation.query.filter(Allocation.deal_id.in_(user_deal_ids)).order_by(Allocation.created_at.desc()).all() if user_deal_ids else []
+    else:
+        allocations = []
     result = []
     for a in allocations:
         gui = _to_gui(a.to_dict())
@@ -831,8 +880,13 @@ def create_allocation():
 
 @compat_bp.route("/milestones", methods=["GET"])
 def list_milestones():
-    """Return all milestones as a flat array."""
-    milestones = Milestone.query.order_by(Milestone.target_date).all()
+    """Return all milestones for the current user's portfolio."""
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    if portfolio_ids:
+        milestones = Milestone.query.filter(Milestone.portfolio_id.in_(portfolio_ids)).order_by(Milestone.target_date).all()
+    else:
+        milestones = []
     return jsonify([_to_gui(m.to_dict()) for m in milestones])
 
 
@@ -878,8 +932,14 @@ def create_milestone():
 
 @compat_bp.route("/vendors", methods=["GET"])
 def list_vendors():
-    """Return all vendors as a flat array."""
-    vendors = Vendor.query.all()
+    """Return all vendors for the current user's portfolio."""
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    if portfolio_ids:
+        vendors = Vendor.query.filter(Vendor.portfolio_id.in_(portfolio_ids)).all()
+    else:
+        vendors = []
+    return jsonify([_to_gui(v.to_dict()) for v in vendors])
     return jsonify([_to_gui(v.to_dict()) for v in vendors])
 
 
@@ -923,8 +983,13 @@ def create_vendor():
 
 @compat_bp.route("/work-orders", methods=["GET"])
 def list_work_orders():
-    """Return all work orders as a flat array."""
-    work_orders = WorkOrder.query.order_by(WorkOrder.created_at.desc()).all()
+    """Return all work orders for the current user's portfolio."""
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    if portfolio_ids:
+        work_orders = WorkOrder.query.filter(WorkOrder.portfolio_id.in_(portfolio_ids)).order_by(WorkOrder.created_at.desc()).all()
+    else:
+        work_orders = []
     return jsonify([_to_gui(wo.to_dict()) for wo in work_orders])
 
 
@@ -970,8 +1035,13 @@ def create_work_order():
 
 @compat_bp.route("/risk-flags", methods=["GET"])
 def list_risk_flags():
-    """Return all risk flags as a flat array."""
-    risk_flags = RiskFlag.query.order_by(RiskFlag.created_at.desc()).all()
+    """Return all risk flags for the current user's portfolio."""
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    if portfolio_ids:
+        risk_flags = RiskFlag.query.filter(RiskFlag.portfolio_id.in_(portfolio_ids)).order_by(RiskFlag.created_at.desc()).all()
+    else:
+        risk_flags = []
     return jsonify([_to_gui(r.to_dict()) for r in risk_flags])
 
 
