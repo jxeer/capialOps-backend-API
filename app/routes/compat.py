@@ -816,12 +816,19 @@ def update_asset(asset_id):
     asset = Asset.query.get_or_404(asset_id)
     data = request.get_json() or {}
     if "name" in data: asset.name = data["name"]
-    if "location" in data: asset.location = data["location"]
+    if "location" in data:
+        loc = data["location"]
+        asset.location = loc["address"] if isinstance(loc, dict) else str(loc)
     if "assetType" in data: asset.asset_type = data["assetType"]
     if "squareFootage" in data: asset.square_footage = data["squareFootage"]
     if "status" in data: asset.status = data["status"]
     if "assetManager" in data: asset.asset_manager = data["assetManager"]
-    if "media" in data: asset.media = data["media"]
+    if "media" in data:
+        media_val = data["media"]
+        if isinstance(media_val, str):
+            import json
+            media_val = json.loads(media_val)
+        asset.media = media_val
     db.session.commit()
     return jsonify(_to_gui(asset.to_dict()))
 
