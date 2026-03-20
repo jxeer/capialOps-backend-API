@@ -278,6 +278,24 @@ def create_app():
                         f"ALTER TABLE risk_flags ADD COLUMN {col_name} {col_def}"
                     ))
 
+        # --- portfolios table migration ---
+        # Add user_id column to portfolios for user-scoped data isolation
+        if inspector.has_table("portfolios"):
+            port_cols = {col["name"] for col in inspector.get_columns("portfolios")}
+            if "user_id" not in port_cols:
+                db.session.execute(text(
+                    "ALTER TABLE portfolios ADD COLUMN user_id INTEGER REFERENCES users(id)"
+                ))
+
+        # --- investors table migration ---
+        # Add user_id column to investors for user-scoped data isolation
+        if inspector.has_table("investors"):
+            inv_cols = {col["name"] for col in inspector.get_columns("investors")}
+            if "user_id" not in inv_cols:
+                db.session.execute(text(
+                    "ALTER TABLE investors ADD COLUMN user_id INTEGER REFERENCES users(id)"
+                ))
+
         db.session.commit()
 
         # Auto-seed demo data if no users exist in the database.

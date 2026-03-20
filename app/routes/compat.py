@@ -247,28 +247,41 @@ def cleanup_seed():
 
 @compat_bp.route("/full-seed", methods=["POST"])
 def full_seed():
-    """Create complete demo data (portfolios, assets, projects, deals, investors, etc).
-    Use this to populate the database for demonstration purposes.
+    """Create complete demo data for the current user (portfolios, assets, projects, deals, investors, etc).
+    Each user gets their own isolated seed data.
     """
     from datetime import date
     from app.models import Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag
     
+    # Get current user from JWT
+    user = _get_user_from_request()
+    if not user:
+        return jsonify({"message": "Authentication required"}), 401
+    
     try:
-        # Delete existing seed data
-        db.session.query(Allocation).delete()
-        db.session.query(Milestone).delete()
-        db.session.query(Deal).delete()
-        db.session.query(Project).delete()
-        db.session.query(Asset).delete()
-        db.session.query(Portfolio).delete()
-        db.session.query(Investor).delete()
-        db.session.query(Vendor).delete()
-        db.session.query(WorkOrder).delete()
-        db.session.query(RiskFlag).delete()
+        # Delete user's existing data (but not other users' data)
+        user_portfolio_ids = [p.id for p in Portfolio.query.filter_by(user_id=user.id).all()]
+        
+        # Delete related data for user's portfolios
+        for pid in user_portfolio_ids:
+            Allocation.query.filter(Allocation.deal_id.in_(
+                db.session.query(Deal.id).filter(Deal.portfolio_id == pid)
+            )).delete(synchronize_session=False)
+            Milestone.query.filter_by(portfolio_id=pid).delete(synchronize_session=False)
+            RiskFlag.query.filter_by(portfolio_id=pid).delete(synchronize_session=False)
+            WorkOrder.query.filter_by(portfolio_id=pid).delete(synchronize_session=False)
+            Vendor.query.filter_by(portfolio_id=pid).delete(synchronize_session=False)
+            Deal.query.filter_by(portfolio_id=pid).delete(synchronize_session=False)
+            Project.query.filter_by(portfolio_id=pid).delete(synchronize_session=False)
+            Asset.query.filter_by(portfolio_id=pid).delete(synchronize_session=False)
+            Portfolio.query.filter_by(id=pid).delete(synchronize_session=False)
+        
+        Investor.query.filter_by(user_id=user.id).delete(synchronize_session=False)
         db.session.commit()
         
-        # Create portfolio
+        # Create portfolio for this user
         portfolio = Portfolio(
+            user_id=user.id,
             name="Core Portfolio",
             description="Primary real estate development portfolio",
         )
@@ -302,13 +315,13 @@ def full_seed():
         db.session.add_all(deals)
         db.session.flush()
         
-        # Create investors
+        # Create investors (owned by this user)
         investors = [
-            Investor(name="Westfield Capital Partners", accreditation_status="Qualified Purchaser", check_size_min=500000, check_size_max=5000000, asset_preference="Multifamily", geography_preference="Sun Belt", risk_tolerance="Moderate", structure_preference="LP Equity", timeline_preference="24-48 months", strategic_interest="Value-Add", tier_level="Tier 2", status="Active"),
-            Investor(name="Angela Moretti", accreditation_status="Accredited", check_size_min=100000, check_size_max=500000, asset_preference="Multifamily", geography_preference="Southeast", risk_tolerance="Conservative", structure_preference="Preferred Equity", timeline_preference="12-36 months", strategic_interest="Cash Flow", tier_level="Tier 1", status="Active"),
-            Investor(name="Horizon Family Office", accreditation_status="Qualified Purchaser", check_size_min=1000000, check_size_max=10000000, asset_preference="Commercial", geography_preference="National", risk_tolerance="Aggressive", structure_preference="JV Equity", timeline_preference="36-60 months", strategic_interest="Development", tier_level="Tier 2", status="Active"),
-            Investor(name="Thomas Blackwell", accreditation_status="Accredited", check_size_min=250000, check_size_max=1000000, asset_preference="Mixed-Use", geography_preference="Mid-Atlantic", risk_tolerance="Moderate", structure_preference="LP Equity", timeline_preference="18-36 months", strategic_interest="Stabilized", tier_level="Tier 1", status="Prospect"),
-            Investor(name="Pacific Ridge Investments", accreditation_status="Qualified Purchaser", check_size_min=2000000, check_size_max=15000000, asset_preference="Mixed-Use", geography_preference="West Coast", risk_tolerance="Aggressive", structure_preference="Co-GP", timeline_preference="48-72 months", strategic_interest="Ground-Up", tier_level="Tier 2", status="Active"),
+            Investor(user_id=user.id, name="Westfield Capital Partners", accreditation_status="Qualified Purchaser", check_size_min=500000, check_size_max=5000000, asset_preference="Multifamily", geography_preference="Sun Belt", risk_tolerance="Moderate", structure_preference="LP Equity", timeline_preference="24-48 months", strategic_interest="Value-Add", tier_level="Tier 2", status="Active"),
+            Investor(user_id=user.id, name="Angela Moretti", accreditation_status="Accredited", check_size_min=100000, check_size_max=500000, asset_preference="Multifamily", geography_preference="Southeast", risk_tolerance="Conservative", structure_preference="Preferred Equity", timeline_preference="12-36 months", strategic_interest="Cash Flow", tier_level="Tier 1", status="Active"),
+            Investor(user_id=user.id, name="Horizon Family Office", accreditation_status="Qualified Purchaser", check_size_min=1000000, check_size_max=10000000, asset_preference="Commercial", geography_preference="National", risk_tolerance="Aggressive", structure_preference="JV Equity", timeline_preference="36-60 months", strategic_interest="Development", tier_level="Tier 2", status="Active"),
+            Investor(user_id=user.id, name="Thomas Blackwell", accreditation_status="Accredited", check_size_min=250000, check_size_max=1000000, asset_preference="Mixed-Use", geography_preference="Mid-Atlantic", risk_tolerance="Moderate", structure_preference="LP Equity", timeline_preference="18-36 months", strategic_interest="Stabilized", tier_level="Tier 1", status="Prospect"),
+            Investor(user_id=user.id, name="Pacific Ridge Investments", accreditation_status="Qualified Purchaser", check_size_min=2000000, check_size_max=15000000, asset_preference="Mixed-Use", geography_preference="West Coast", risk_tolerance="Aggressive", structure_preference="Co-GP", timeline_preference="48-72 months", strategic_interest="Ground-Up", tier_level="Tier 2", status="Active"),
         ]
         db.session.add_all(investors)
         db.session.flush()
@@ -340,7 +353,8 @@ def full_seed():
         db.session.commit()
         
         return jsonify({
-            "message": "Full seed data created",
+            "message": "Full seed data created for user",
+            "user": user.username,
             "portfolio": portfolio.name,
             "assets": len(assets),
             "projects": len(projects),

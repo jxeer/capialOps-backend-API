@@ -180,21 +180,28 @@ class Portfolio(db.Model):
     Currently only one portfolio exists, but the schema is designed so that
     all downstream entities carry a portfolio_id for future multi-portfolio expansion
     without requiring a schema rewrite.
+    
+    Each portfolio is owned by a specific user (user_id).
     """
     __tablename__ = "portfolios"
 
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)  # Owner
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # One portfolio has many assets
     assets = db.relationship("Asset", backref="portfolio", lazy=True)
+    
+    # Relationship to owner user
+    owner = db.relationship("User", backref="portfolios")
 
     def to_dict(self):
         """Serialize portfolio to a JSON-safe dictionary."""
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "name": self.name,
             "description": self.description,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -357,6 +364,7 @@ class Investor(db.Model):
     __tablename__ = "investors"
 
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)  # Owner (optional for shared investors)
     name = db.Column(db.String(200), nullable=False)
     accreditation_status = db.Column(db.String(50))     # Verified or Pending
     check_size_min = db.Column(db.Numeric(15, 2))       # Minimum investment amount
@@ -378,6 +386,7 @@ class Investor(db.Model):
         """Serialize investor to a JSON-safe dictionary."""
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "name": self.name,
             "accreditation_status": self.accreditation_status,
             "check_size_min": float(self.check_size_min or 0),
