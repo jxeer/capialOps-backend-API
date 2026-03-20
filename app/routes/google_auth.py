@@ -90,14 +90,9 @@ def google_redirect():
         backend_url = f"https://{railway_domain}"
     else:
         backend_url = request.url_root.rstrip("/")
-        if backend_url.startswith("http://"):
-            backend_url = "https://" + backend_url[7:]
     
-    # Debug logging
-    import logging
-    logging.warning(f"google_redirect: RAILWAY_PUBLIC_DOMAIN={railway_domain}, backend_url={backend_url}")
-    
-    redirect_uri = f"{backend_url}/api/v1/auth/google/callback"
+    # Always use https for the redirect_uri (Google requires it)
+    redirect_uri = backend_url.replace("http://", "https://") + "/api/v1/auth/google/callback"
     
     params = urllib.parse.urlencode({
         "client_id": client_id,
