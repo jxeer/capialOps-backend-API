@@ -191,6 +191,43 @@ def debug_config():
     })
 
 
+@compat_bp.route("/cleanup-seed", methods=["POST"])
+def cleanup_seed():
+    """Remove seed users (pm, gc) keeping only admin and julian.xeer@gmail.com.
+    Also removes seed portfolios/assets/projects/deals if they exist.
+    """
+    from app.models import Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag, User
+    
+    # Delete non-essential users (keep admin and julian.xeer@gmail.com)
+    kept_users = User.query.filter(
+        User.username.in_(["admin", "pm", "gc"]),
+        User.email.notin_(["admin@capitalops.io", "julian.xeer@gmail.com"])
+    ).all()
+    
+    deleted_users = []
+    for u in kept_users:
+        deleted_users.append(u.username)
+        db.session.delete(u)
+    
+    # Delete seed data
+    deleted_portfolios = Portfolio.query.filter(Portfolio.name != "Core Portfolio").all()
+    for p in deleted_portfolios:
+        db.session.delete(p)
+    
+    # Also clean up Core Portfolio if it has seed data
+    core = Portfolio.query.filter_by(name="Core Portfolio").first()
+    if core:
+        db.session.delete(core)
+    
+    db.session.commit()
+    
+    return jsonify({
+        "message": "Cleanup complete",
+        "deleted_users": deleted_users,
+        "deleted_portfolios": [p.name for p in deleted_portfolios],
+    })
+
+
 @compat_bp.route("/seed", methods=["POST"])
 def trigger_seed():
     """Manually trigger seed data (portfolios, assets, projects, etc).
