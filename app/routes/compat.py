@@ -196,44 +196,53 @@ def cleanup_seed():
     """Remove seed users (pm, gc) keeping only admin and julian.xeer@gmail.com.
     Also removes seed portfolios/assets/projects/deals if they exist.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     from app.models import Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag, User
     
-    deleted_users = []
-    # Delete pm and gc users
-    for u in User.query.all():
-        if u.username in ["pm", "gc"]:
-            deleted_users.append(u.username)
-            db.session.delete(u)
-    
-    # Delete all seed data
-    for p in Portfolio.query.all():
-        db.session.delete(p)
-    for a in Asset.query.all():
-        db.session.delete(a)
-    for proj in Project.query.all():
-        db.session.delete(proj)
-    for d in Deal.query.all():
-        db.session.delete(d)
-    for i in Investor.query.all():
-        db.session.delete(i)
-    for al in Allocation.query.all():
-        db.session.delete(al)
-    for m in Milestone.query.all():
-        db.session.delete(m)
-    for v in Vendor.query.all():
-        db.session.delete(v)
-    for w in WorkOrder.query.all():
-        db.session.delete(w)
-    for r in RiskFlag.query.all():
-        db.session.delete(r)
-    
-    db.session.commit()
-    
-    return jsonify({
-        "message": "Cleanup complete",
-        "deleted_users": deleted_users,
-        "remaining_users": [u.username for u in User.query.all()],
-    })
+    try:
+        deleted_users = []
+        # Delete pm and gc users
+        for u in User.query.all():
+            if u.username in ["pm", "gc"]:
+                deleted_users.append(u.username)
+                db.session.delete(u)
+        
+        # Delete all seed data in correct order (handle foreign keys)
+        # First delete children, then parents
+        for r in RiskFlag.query.all():
+            db.session.delete(r)
+        for w in WorkOrder.query.all():
+            db.session.delete(w)
+        for al in Allocation.query.all():
+            db.session.delete(al)
+        for m in Milestone.query.all():
+            db.session.delete(m)
+        for d in Deal.query.all():
+            db.session.delete(d)
+        for v in Vendor.query.all():
+            db.session.delete(v)
+        for proj in Project.query.all():
+            db.session.delete(proj)
+        for a in Asset.query.all():
+            db.session.delete(a)
+        for p in Portfolio.query.all():
+            db.session.delete(p)
+        for i in Investor.query.all():
+            db.session.delete(i)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Cleanup complete",
+            "deleted_users": deleted_users,
+            "remaining_users": [u.username for u in User.query.all()],
+        })
+    except Exception as e:
+        logger.error(f"Cleanup error: {str(e)}")
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 
 @compat_bp.route("/seed", methods=["POST"])
