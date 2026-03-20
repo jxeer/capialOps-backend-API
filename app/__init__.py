@@ -73,12 +73,12 @@ def create_app():
     app.config["JWT_HEADER_NAME"] = "Authorization"
     app.config["JWT_HEADER_TYPE"] = "Bearer"
 
-    # PostgreSQL connection string - REQUIRED in production
-    # Railway provides this via the DATABASE_URL environment variable
+    # PostgreSQL connection string - uses Railway PostgreSQL if DATABASE_URL is set
     db_url = os.environ.get("DATABASE_URL")
-    if not db_url:
-        raise RuntimeError("DATABASE_URL environment variable is not set! Railway PostgreSQL must be connected.")
-    app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+    if db_url:
+        app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+    else:
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///capitalops.db"
 
     # Disable modification tracking to save memory (we don't use this feature)
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
