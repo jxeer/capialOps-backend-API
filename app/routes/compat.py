@@ -643,9 +643,21 @@ def create_asset():
     if not data or not data.get("name"):
         return jsonify({"error": "name is required"}), 400
 
-    portfolio = Portfolio.query.first()
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    
+    # Use user's first portfolio, or create one if none exists
+    if portfolio_ids:
+        portfolio_id = int(data.get("portfolioId", portfolio_ids[0]))
+    else:
+        # Create a default portfolio for the user
+        portfolio = Portfolio(user_id=user.id, name="My Portfolio", description="My real estate portfolio")
+        db.session.add(portfolio)
+        db.session.flush()
+        portfolio_id = portfolio.id
+    
     asset = Asset(
-        portfolio_id=int(data.get("portfolioId", portfolio.id if portfolio else 1)),
+        portfolio_id=portfolio_id,
         name=data["name"],
         location=data.get("location", ""),
         asset_type=data.get("assetType", ""),
@@ -699,10 +711,21 @@ def create_project():
     except (ValueError, TypeError):
         return jsonify({"error": "assetId must be a valid integer"}), 400
 
-    portfolio = Portfolio.query.first()
+    # Get asset to find its portfolio
+    asset = Asset.query.get(asset_id)
+    if not asset:
+        return jsonify({"error": "Asset not found"}), 404
+    
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    
+    # Verify asset belongs to user's portfolio
+    if asset.portfolio_id not in portfolio_ids:
+        return jsonify({"error": "Asset not found"}), 404
+    
     project = Project(
         asset_id=asset_id,
-        portfolio_id=int(data.get("portfolioId", portfolio.id if portfolio else 1)),
+        portfolio_id=asset.portfolio_id,
         phase=data.get("phase", "Planning"),
         start_date=data.get("startDate"),
         target_completion=data.get("targetCompletion"),
@@ -752,10 +775,19 @@ def create_deal():
     if not data or not data.get("projectId"):
         return jsonify({"error": "projectId is required"}), 400
 
-    portfolio = Portfolio.query.first()
+    user = _get_user_from_request()
+    portfolio_ids = _get_user_portfolio_ids(user)
+    
+    # Get project and verify it belongs to user
+    project = Project.query.get(int(data["projectId"]))
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    if project.portfolio_id not in portfolio_ids:
+        return jsonify({"error": "Project not found"}), 404
+    
     deal = Deal(
         project_id=int(data["projectId"]),
-        portfolio_id=int(data.get("portfolioId", portfolio.id if portfolio else 1)),
+        portfolio_id=project.portfolio_id,
         capital_required=data.get("capitalRequired", 0),
         capital_raised=data.get("capitalRaised", 0),
         return_profile=data.get("returnProfile", ""),
@@ -804,7 +836,10 @@ def create_investor():
     if not data or not data.get("name"):
         return jsonify({"error": "name is required"}), 400
 
+    user = _get_user_from_request()
+    
     investor = Investor(
+        user_id=user.id if user else None,
         name=data["name"],
         accreditation_status=data.get("accreditationStatus", "Pending"),
         check_size_min=data.get("checkSizeMin", 0),
