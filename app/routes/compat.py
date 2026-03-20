@@ -1111,54 +1111,15 @@ def delete_risk_flag(rf_id):
 
 # ---------------------------------------------------------------------------
 # S3 File Upload (Phase 4 - Profile Enhancement)
+# NOTE: This route is commented out - the JSON-based upload route is below
 # ---------------------------------------------------------------------------
-
-@compat_bp.route("/upload", methods=["POST"])
-@cross_origin(origin="*", methods=["POST"], allow_headers=["Content-Type", "Authorization", "X-API-Key"], supports_credentials=True)
-@_require_api_key
-def upload_file():
-    """Handle file uploads for profile avatars.
-
-    Accepts a multipart 'file' field. Converts the image to a base64 data URL
-    and stores it directly in the database — no S3 or external storage required.
-    If a 'userId' form field is provided, the data URL is persisted to that
-    user's profile_image column immediately.
-
-    Returns (201): { "url": "<data_url>", "key": "<path>" }
-    """
-    import base64
-    import io
-    from app.routes.uploads import _image_to_data_url, MAX_UPLOAD_BYTES
-
-    file = request.files.get("file")
-    path = request.form.get("path", "avatar")
-    user_id = request.form.get("userId")
-
-    if not file:
-        return jsonify({"error": "File is required"}), 400
-
-    # Read and validate size
-    file_data = file.read()
-    if not file_data:
-        return jsonify({"error": "Empty file received"}), 400
-    if len(file_data) > MAX_UPLOAD_BYTES:
-        return jsonify({"error": f"File too large. Maximum size is {MAX_UPLOAD_BYTES // (1024*1024)} MB"}), 400
-
-    # Convert to base64 data URL (no S3 needed)
-    mime_type = file.content_type or "image/jpeg"
-    data_url = _image_to_data_url(file_data, mime_type)
-
-    # Persist to user's profile_image if userId provided
-    if user_id:
-        try:
-            user = User.query.get(int(user_id))
-            if user:
-                user.profile_image = data_url
-                db.session.commit()
-        except Exception:
-            pass  # Non-fatal — still return the URL
-
-    return jsonify({"url": data_url, "key": path}), 201
+# 
+# @compat_bp.route("/upload", methods=["POST"])
+# @cross_origin(origin="*", methods=["POST"], allow_headers=["Content-Type", "Authorization", "X-API-Key"], supports_credentials=True)
+# @_require_api_key
+# def upload_file():
+#     """Handle file uploads for profile avatars."""
+#     ...
 
 @compat_bp.route("/connection-requests", methods=["GET"])
 @_require_api_key
