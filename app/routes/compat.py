@@ -249,15 +249,23 @@ def cleanup_seed():
 def full_seed():
     """Create complete demo data (portfolios, assets, projects, deals, investors, etc).
     Use this to populate the database for demonstration purposes.
-    This creates data regardless of existing users.
     """
     from datetime import date
     from app.models import Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag
     
     try:
-        # Check if already seeded
-        if Portfolio.query.first() and Project.query.first():
-            return jsonify({"message": "Seed data already exists", "portfolioCount": Portfolio.query.count()})
+        # Delete existing seed data
+        db.session.query(Allocation).delete()
+        db.session.query(Milestone).delete()
+        db.session.query(Deal).delete()
+        db.session.query(Project).delete()
+        db.session.query(Asset).delete()
+        db.session.query(Portfolio).delete()
+        db.session.query(Investor).delete()
+        db.session.query(Vendor).delete()
+        db.session.query(WorkOrder).delete()
+        db.session.query(RiskFlag).delete()
+        db.session.commit()
         
         # Create portfolio
         portfolio = Portfolio(
