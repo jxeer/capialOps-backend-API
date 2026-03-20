@@ -63,7 +63,7 @@ def google_debug():
         "client_id": os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "NOT SET")[:20] + "...",
     })
 
-@google_auth_bp.route("/google", methods=["GET"])
+@google_auth_bp.route("/google-start", methods=["GET"])
 def google_redirect():
     """Redirect to Google's OAuth consent page.
     
