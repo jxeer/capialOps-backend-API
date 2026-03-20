@@ -252,9 +252,13 @@ def full_seed():
     """
     from datetime import date
     from app.models import Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag
+    import logging
+    logger = logging.getLogger(__name__)
     
     # Get current user from JWT
     user = _get_user_from_request()
+    logger.warning(f"full-seed called, user: {user}")
+    
     if not user:
         return jsonify({"message": "Authentication required"}), 401
     
