@@ -178,6 +178,19 @@ def setup_admin():
     }), 201
 
 
+@compat_bp.route("/debug-config", methods=["GET"])
+def debug_config():
+    """Debug endpoint to check configuration."""
+    import os
+    db_url = os.environ.get("DATABASE_URL")
+    return jsonify({
+        "database_url_set": bool(db_url),
+        "database_url_preview": db_url[:30] + "..." if db_url else None,
+        "flask_env": os.environ.get("FLASK_ENV"),
+        "railway_env": os.environ.get("RAILWAY"),
+    })
+
+
 @compat_bp.route("/seed", methods=["POST"])
 def trigger_seed():
     """Manually trigger seed data (portfolios, assets, projects, etc).
@@ -185,7 +198,6 @@ def trigger_seed():
     """
     from app.models import Portfolio, Asset, Project
 
-    # Check if seed data already exists
     if Portfolio.query.first() and Asset.query.first() and Project.query.first():
         return jsonify({
             "message": "Seed data already exists",
@@ -194,15 +206,13 @@ def trigger_seed():
             "projects": Project.query.count(),
         })
 
-    # Create Demo Portfolio
     portfolio = Portfolio(
         name="CapitalOps Premier Fund",
         description="Diversified real estate development portfolio targeting 18-22% IRR across multifamily, mixed-use, and commercial projects in high-growth US markets.",
     )
     db.session.add(portfolio)
-    db.session.flush()  # Get the ID
+    db.session.flush()
 
-    # Create Demo Asset
     asset = Asset(
         portfolio_id=portfolio.id,
         name="The Meridian Tower",
@@ -215,7 +225,6 @@ def trigger_seed():
     db.session.add(asset)
     db.session.flush()
 
-    # Create Demo Project
     project = Project(
         asset_id=asset.id,
         portfolio_id=portfolio.id,
