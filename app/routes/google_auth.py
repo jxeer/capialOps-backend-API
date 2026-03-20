@@ -80,7 +80,10 @@ def google_redirect():
     if not client_id:
         return jsonify({"error": "Google OAuth not configured"}), 400
     
+    # Force https for Railway/production
     backend_url = request.url_root.rstrip("/")
+    if backend_url.startswith("http://"):
+        backend_url = "https://" + backend_url[7:]
     redirect_uri = f"{backend_url}/api/v1/auth/google/callback"
     
     params = urllib.parse.urlencode({
