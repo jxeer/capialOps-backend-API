@@ -245,6 +245,22 @@ def cleanup_seed():
         return jsonify({"error": str(e)}), 500
 
 
+@compat_bp.route("/full-seed", methods=["POST"])
+def full_seed():
+    """Create complete demo data (portfolios, assets, projects, deals, investors, etc).
+    Use this to populate the database for demonstration purposes.
+    """
+    from app import seed_demo_data
+    
+    try:
+        seed_demo_data()
+        return jsonify({"message": "Full seed data created successfully"})
+    except Exception as e:
+        import logging
+        logging.error(f"Full seed error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
 @compat_bp.route("/seed", methods=["POST"])
 def trigger_seed():
     """Manually trigger seed data (portfolios, assets, projects, etc).
