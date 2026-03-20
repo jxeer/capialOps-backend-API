@@ -249,15 +249,100 @@ def cleanup_seed():
 def full_seed():
     """Create complete demo data (portfolios, assets, projects, deals, investors, etc).
     Use this to populate the database for demonstration purposes.
+    This creates data regardless of existing users.
     """
-    from app import seed_demo_data
+    from datetime import date
+    from app.models import Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag
     
     try:
-        seed_demo_data()
-        return jsonify({"message": "Full seed data created successfully"})
+        # Check if already seeded
+        if Portfolio.query.first() and Project.query.first():
+            return jsonify({"message": "Seed data already exists", "portfolioCount": Portfolio.query.count()})
+        
+        # Create portfolio
+        portfolio = Portfolio(
+            name="Core Portfolio",
+            description="Primary real estate development portfolio",
+        )
+        db.session.add(portfolio)
+        db.session.flush()
+        
+        # Create assets
+        assets = [
+            Asset(portfolio_id=portfolio.id, name="The Meridian", location="Austin, TX", asset_type="Multifamily", square_footage=185000, status="Active", asset_manager="Julian"),
+            Asset(portfolio_id=portfolio.id, name="Parkside Commons", location="Denver, CO", asset_type="Mixed-Use", square_footage=120000, status="Pre-dev", asset_manager="Julian"),
+            Asset(portfolio_id=portfolio.id, name="Harbor Point", location="Miami, FL", asset_type="Commercial", square_footage=95000, status="Active", asset_manager="Julian"),
+        ]
+        db.session.add_all(assets)
+        db.session.flush()
+        
+        # Create projects
+        projects = [
+            Project(asset_id=assets[0].id, portfolio_id=portfolio.id, phase="Construction", start_date=date(2025,6,1), target_completion=date(2026,12,31), budget_total=28500000, budget_actual=12400000, status="In Progress", pm_assigned="Sarah Chen"),
+            Project(asset_id=assets[1].id, portfolio_id=portfolio.id, phase="Pre-Development", start_date=date(2025,9,1), target_completion=date(2027,6,30), budget_total=18200000, budget_actual=1850000, status="Planning", pm_assigned="Sarah Chen"),
+            Project(asset_id=assets[2].id, portfolio_id=portfolio.id, phase="Stabilization", start_date=date(2024,1,15), target_completion=date(2026,6,30), budget_total=14800000, budget_actual=13200000, status="On Hold", pm_assigned="Mike Torres"),
+        ]
+        db.session.add_all(projects)
+        db.session.flush()
+        
+        # Create deals
+        deals = [
+            Deal(project_id=projects[0].id, portfolio_id=portfolio.id, capital_required=28500000, capital_raised=19200000, return_profile="18-22% IRR", duration="36 months", risk_level="Medium", complexity="Complex", phase="Fundraising", status="Active"),
+            Deal(project_id=projects[1].id, portfolio_id=portfolio.id, capital_required=18200000, capital_raised=4500000, return_profile="15-18% IRR", duration="48 months", risk_level="High", complexity="Moderate", phase="Pre-Marketing", status="Draft"),
+            Deal(project_id=projects[2].id, portfolio_id=portfolio.id, capital_required=14800000, capital_raised=14800000, return_profile="12-15% IRR", duration="24 months", risk_level="Low", complexity="Simple", phase="Closed", status="Funded"),
+        ]
+        db.session.add_all(deals)
+        db.session.flush()
+        
+        # Create investors
+        investors = [
+            Investor(name="Westfield Capital Partners", accreditation_status="Qualified Purchaser", check_size_min=500000, check_size_max=5000000, asset_preference="Multifamily", geography_preference="Sun Belt", risk_tolerance="Moderate", structure_preference="LP Equity", timeline_preference="24-48 months", strategic_interest="Value-Add", tier_level="Tier 2", status="Active"),
+            Investor(name="Angela Moretti", accreditation_status="Accredited", check_size_min=100000, check_size_max=500000, asset_preference="Multifamily", geography_preference="Southeast", risk_tolerance="Conservative", structure_preference="Preferred Equity", timeline_preference="12-36 months", strategic_interest="Cash Flow", tier_level="Tier 1", status="Active"),
+            Investor(name="Horizon Family Office", accreditation_status="Qualified Purchaser", check_size_min=1000000, check_size_max=10000000, asset_preference="Commercial", geography_preference="National", risk_tolerance="Aggressive", structure_preference="JV Equity", timeline_preference="36-60 months", strategic_interest="Development", tier_level="Tier 2", status="Active"),
+            Investor(name="Thomas Blackwell", accreditation_status="Accredited", check_size_min=250000, check_size_max=1000000, asset_preference="Mixed-Use", geography_preference="Mid-Atlantic", risk_tolerance="Moderate", structure_preference="LP Equity", timeline_preference="18-36 months", strategic_interest="Stabilized", tier_level="Tier 1", status="Prospect"),
+            Investor(name="Pacific Ridge Investments", accreditation_status="Qualified Purchaser", check_size_min=2000000, check_size_max=15000000, asset_preference="Mixed-Use", geography_preference="West Coast", risk_tolerance="Aggressive", structure_preference="Co-GP", timeline_preference="48-72 months", strategic_interest="Ground-Up", tier_level="Tier 2", status="Active"),
+        ]
+        db.session.add_all(investors)
+        db.session.flush()
+        
+        # Create allocations
+        allocations = [
+            Allocation(investor_id=investors[0].id, deal_id=deals[0].id, soft_commit_amount=2000000, hard_commit_amount=1500000, status="Hard Commit"),
+            Allocation(investor_id=investors[1].id, deal_id=deals[0].id, soft_commit_amount=350000, hard_commit_amount=350000, status="Funded"),
+            Allocation(investor_id=investors[2].id, deal_id=deals[0].id, soft_commit_amount=5000000, hard_commit_amount=0, status="Soft Commit"),
+            Allocation(investor_id=investors[4].id, deal_id=deals[0].id, soft_commit_amount=3000000, hard_commit_amount=3000000, status="Funded"),
+        ]
+        db.session.add_all(allocations)
+        
+        # Create milestones
+        milestones = [
+            Milestone(project_id=projects[0].id, portfolio_id=portfolio.id, name="Foundation Complete", category="Construction", target_date=date(2025,9,15), completion_date=date(2025,9,20), status="Completed", delay_explanation="5-day weather delay", risk_flag=False),
+            Milestone(project_id=projects[0].id, portfolio_id=portfolio.id, name="Steel Structure", category="Construction", target_date=date(2025,12,1), completion_date=None, status="In Progress", delay_explanation=None, risk_flag=False),
+            Milestone(project_id=projects[1].id, portfolio_id=portfolio.id, name="Entitlements Secured", category="Pre-Development", target_date=date(2025,11,1), completion_date=None, status="In Progress", delay_explanation=None, risk_flag=True),
+        ]
+        db.session.add_all(milestones)
+        
+        # Create vendors
+        vendors = [
+            Vendor(asset_id=assets[0].id, portfolio_id=portfolio.id, name="Summit Construction Co.", type="General Contractor", coi_status="Current", sla_type="Standard", performance_score=92),
+            Vendor(asset_id=assets[1].id, portfolio_id=portfolio.id, name="Urban Electric LLC", type="Electrical", coi_status="Expired", sla_type="Standard", performance_score=75),
+        ]
+        db.session.add_all(vendors)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Full seed data created",
+            "portfolio": portfolio.name,
+            "assets": len(assets),
+            "projects": len(projects),
+            "deals": len(deals),
+            "investors": len(investors),
+        })
     except Exception as e:
         import logging
         logging.error(f"Full seed error: {str(e)}")
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 
