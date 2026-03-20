@@ -484,9 +484,14 @@ def create_project():
     if not data or not data.get("assetId"):
         return jsonify({"error": "assetId is required"}), 400
 
+    try:
+        asset_id = int(data["assetId"])
+    except (ValueError, TypeError):
+        return jsonify({"error": "assetId must be a valid integer"}), 400
+
     portfolio = Portfolio.query.first()
     project = Project(
-        asset_id=int(data["assetId"]),
+        asset_id=asset_id,
         portfolio_id=int(data.get("portfolioId", portfolio.id if portfolio else 1)),
         phase=data.get("phase", "Planning"),
         start_date=data.get("startDate"),
