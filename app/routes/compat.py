@@ -202,20 +202,43 @@ def compat_register():
 
 
 # ---------------------------------------------------------------------------
-# User (from session) - for GUI compatibility
+# User (from session or JWT) - for GUI compatibility
 # ---------------------------------------------------------------------------
+
+def _get_user_from_request():
+    """Extract user from request - checks JWT Bearer token or Flask session."""
+    from flask import request, session
+    from flask_jwt_extended import decode_token
+    from app.auth_utils import get_current_user
+    
+    # Try JWT Bearer token first
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        try:
+            decoded = decode_token(token)
+            user_id = decoded.get("sub")
+            if user_id:
+                user = User.query.get(int(user_id))
+                if user:
+                    return user
+        except Exception:
+            pass
+    
+    # Fall back to session
+    user_id = session.get("user_id")
+    if user_id:
+        return User.query.get(user_id)
+    
+    return None
+
 
 @compat_bp.route("/user", methods=["GET"])
 def get_user():
-    """Return the current authenticated user from the session."""
-    from flask import session
-    user_id = session.get("user_id")
-    if not user_id:
-        return jsonify({"message": "Authentication required"}), 401
-    
-    user = User.query.get(user_id)
+    """Return the current authenticated user from JWT token or session."""
+    user = _get_user_from_request()
     if not user:
-        return jsonify({"error": "User not found"}), 404
+        return jsonify({"message": "Authentication required"}), 401
     return jsonify(user.to_dict())
 
 
