@@ -80,12 +80,14 @@ def google_redirect():
     if not client_id:
         return jsonify({"error": "Google OAuth not configured"}), 400
     
-    # Use FRONTEND_ORIGIN env var if set (Railway/production),
-    # otherwise fall back to request.url_root (dev)
-    backend_url = os.environ.get("FRONTEND_ORIGIN", request.url_root.rstrip("/"))
-    # Ensure https for production
-    if backend_url.startswith("http://"):
-        backend_url = "https://" + backend_url[7:]
+    # On Railway, request.url_root shows http:// but traffic is https://
+    # Use RAILWAY_PUBLIC_DOMAIN if available, otherwise force https
+    if os.environ.get("RAILWAY_PUBLIC_DOMAIN"):
+        backend_url = f"https://{os.environ['RAILWAY_PUBLIC_DOMAIN']}"
+    else:
+        backend_url = request.url_root.rstrip("/")
+        if backend_url.startswith("http://"):
+            backend_url = "https://" + backend_url[7:]
     redirect_uri = f"{backend_url}/api/v1/auth/google/callback"
     
     params = urllib.parse.urlencode({
