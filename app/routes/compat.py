@@ -183,7 +183,7 @@ def trigger_seed():
     """Manually trigger seed data (portfolios, assets, projects, etc).
     Use after /setup-admin to populate demo data.
     """
-    from app.models import Portfolio, Asset, Project, Deal, Milestone, Vendor, WorkOrder, Investor, Allocation, RiskFlag
+    from app.models import Portfolio, Asset, Project
 
     # Check if seed data already exists
     if Portfolio.query.first() and Asset.query.first() and Project.query.first():
@@ -210,10 +210,11 @@ def trigger_seed():
         status="Active",
     )
     db.session.add(portfolio)
+    db.session.flush()  # Get the ID
 
     # Create Demo Asset
     asset = Asset(
-        portfolio=portfolio,
+        portfolio_id=portfolio.id,
         name="The Meridian Tower",
         location="Austin, TX",
         asset_type="Mixed-Use",
@@ -222,11 +223,12 @@ def trigger_seed():
         asset_manager="Sarah Chen",
     )
     db.session.add(asset)
+    db.session.flush()
 
     # Create Demo Project
     project = Project(
-        asset=asset,
-        portfolio=portfolio,
+        asset_id=asset.id,
+        portfolio_id=portfolio.id,
         phase="Construction",
         start_date="2024-01-15",
         target_completion="2026-06-30",
@@ -236,14 +238,13 @@ def trigger_seed():
         pm_assigned="Michael Torres",
     )
     db.session.add(project)
-
     db.session.commit()
 
     return jsonify({
         "message": "Seed data created",
-        "portfolio": portfolio.to_dict() if hasattr(portfolio, 'to_dict') else {"id": portfolio.id, "name": portfolio.name},
-        "asset": asset.to_dict() if hasattr(asset, 'to_dict') else {"id": asset.id, "name": asset.name},
-        "project": project.to_dict() if hasattr(project, 'to_dict') else {"id": project.id, "name": project.phase},
+        "portfolio": {"id": portfolio.id, "name": portfolio.name},
+        "asset": {"id": asset.id, "name": asset.name},
+        "project": {"id": project.id, "phase": project.phase},
     }), 201
 
 
