@@ -194,20 +194,10 @@ def trigger_seed():
             "projects": Project.query.count(),
         })
 
-    # Get admin user for relations
-    admin = User.query.filter_by(username="admin").first()
-    if not admin:
-        return jsonify({"error": "Admin user not found. Run /setup-admin first."}), 400
-
     # Create Demo Portfolio
     portfolio = Portfolio(
         name="CapitalOps Premier Fund",
         description="Diversified real estate development portfolio targeting 18-22% IRR across multifamily, mixed-use, and commercial projects in high-growth US markets.",
-        total_value=50000000,
-        committed_capital=35000000,
-        available_capital=15000000,
-        deployment_period="2024-2027",
-        status="Active",
     )
     db.session.add(portfolio)
     db.session.flush()  # Get the ID
