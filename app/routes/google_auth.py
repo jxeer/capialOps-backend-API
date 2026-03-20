@@ -57,10 +57,13 @@ def google_status():
 @google_auth_bp.route("/debug", methods=["GET"])
 def google_debug():
     """Debug endpoint to verify route registration."""
+    railway_vars = {k: v for k, v in os.environ.items() if k.startswith("RAILWAY")}
     return jsonify({
         "message": "Google debug endpoint works",
         "client_id_set": bool(os.environ.get("GOOGLE_OAUTH_CLIENT_ID")),
         "client_id": os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "NOT SET")[:20] + "...",
+        "url_root": request.url_root,
+        "railway_vars": railway_vars,
     })
 
 @google_auth_bp.route("/gauth", methods=["GET"])
@@ -80,14 +83,20 @@ def google_redirect():
     if not client_id:
         return jsonify({"error": "Google OAuth not configured"}), 400
     
-    # On Railway, request.url_root shows http:// but traffic is https://
-    # Use RAILWAY_PUBLIC_DOMAIN if available, otherwise force https
-    if os.environ.get("RAILWAY_PUBLIC_DOMAIN"):
-        backend_url = f"https://{os.environ['RAILWAY_PUBLIC_DOMAIN']}"
+    # Railway uses https externally but http internally
+    # RAILWAY_PUBLIC_DOMAIN is set automatically on Railway
+    railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+    if railway_domain:
+        backend_url = f"https://{railway_domain}"
     else:
         backend_url = request.url_root.rstrip("/")
         if backend_url.startswith("http://"):
             backend_url = "https://" + backend_url[7:]
+    
+    # Debug logging
+    import logging
+    logging.warning(f"google_redirect: RAILWAY_PUBLIC_DOMAIN={railway_domain}, backend_url={backend_url}")
+    
     redirect_uri = f"{backend_url}/api/v1/auth/google/callback"
     
     params = urllib.parse.urlencode({
