@@ -73,10 +73,11 @@ def create_app():
     app.config["JWT_HEADER_NAME"] = "Authorization"
     app.config["JWT_HEADER_TYPE"] = "Bearer"
 
-    # PostgreSQL connection string provided by Replit's managed database
+    # PostgreSQL connection string - REQUIRED in production
+    # Railway provides this via the DATABASE_URL environment variable
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
-        db_url = "sqlite:///capitalops.db"
+        raise RuntimeError("DATABASE_URL environment variable is not set! Railway PostgreSQL must be connected.")
     app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 
     # Disable modification tracking to save memory (we don't use this feature)
