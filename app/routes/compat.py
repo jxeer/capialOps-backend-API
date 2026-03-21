@@ -245,6 +245,33 @@ def cleanup_seed():
         return jsonify({"error": str(e)}), 500
 
 
+@compat_bp.route("/debug-token", methods=["POST"])
+def debug_token():
+    """Debug endpoint to check JWT token parsing."""
+    from flask import request
+    from flask_jwt_extended import decode_token
+    
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "No Bearer token provided"}), 400
+    
+    token = auth_header[7:]
+    
+    try:
+        decoded = decode_token(token)
+        user_id = decoded.get("sub")
+        return jsonify({
+            "token_valid": True,
+            "decoded": decoded,
+            "user_id": user_id,
+        })
+    except Exception as e:
+        return jsonify({
+            "token_valid": False,
+            "error": str(e),
+        }), 400
+
+
 @compat_bp.route("/full-seed", methods=["POST"])
 def full_seed():
     """Create complete demo data for the current user (portfolios, assets, projects, deals, investors, etc).
