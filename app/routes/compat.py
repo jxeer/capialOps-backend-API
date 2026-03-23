@@ -711,13 +711,16 @@ def dashboard_stats():
 
 @compat_bp.route("/portfolios", methods=["GET"])
 def list_portfolios():
-    """Return all portfolios for the current user as a flat array."""
+    """Return all portfolios for the current user as a flat array.
+    Falls back to returning all portfolios without user_id (global data) if no user.
+    """
     user = _get_user_from_request()
     portfolio_ids = _get_user_portfolio_ids(user)
     if portfolio_ids:
         portfolios = Portfolio.query.filter(Portfolio.id.in_(portfolio_ids)).all()
     else:
-        portfolios = []
+        # Fall back to global portfolios (no user_id)
+        portfolios = Portfolio.query.filter(Portfolio.user_id.is_(None)).all()
     return jsonify([_to_gui(p.to_dict()) for p in portfolios])
 
 
