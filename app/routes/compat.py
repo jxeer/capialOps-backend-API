@@ -354,6 +354,20 @@ def global_seed():
         return jsonify({"error": str(e)}), 500
 
 
+@compat_bp.route("/debug-jwt-config", methods=["GET"])
+def debug_jwt_config():
+    """Debug endpoint to check JWT configuration."""
+    import os
+    from flask import current_app
+    
+    return jsonify({
+        "jwt_secret_key_set": bool(current_app.config.get("JWT_SECRET_KEY")),
+        "jwt_secret_key_prefix": (current_app.config.get("JWT_SECRET_KEY") or "")[:10] + "...",
+        "env_jwt_secret": os.environ.get("JWT_SECRET_KEY", "NOT SET")[:10] + "..." if os.environ.get("JWT_SECRET_KEY") else "NOT SET",
+        "env_secret_key": os.environ.get("SECRET_KEY", "NOT SET")[:10] + "..." if os.environ.get("SECRET_KEY") else "NOT SET",
+    })
+
+
 @compat_bp.route("/debug-token", methods=["POST"])
 def full_seed():
     """Create complete demo data for the current user (portfolios, assets, projects, deals, investors, etc).
