@@ -254,16 +254,16 @@ def global_seed():
     from app.models import Portfolio, Asset, Project, Deal, Investor, Allocation, Milestone, Vendor, WorkOrder, RiskFlag
     
     try:
-        # Delete existing data
+        # Delete in correct order to handle foreign keys
         db.session.query(Allocation).delete()
         db.session.query(Milestone).delete()
+        db.session.query(WorkOrder).delete()
+        db.session.query(Vendor).delete()
         db.session.query(Deal).delete()
         db.session.query(Project).delete()
         db.session.query(Asset).delete()
         db.session.query(Portfolio).delete()
         db.session.query(Investor).delete()
-        db.session.query(Vendor).delete()
-        db.session.query(WorkOrder).delete()
         db.session.query(RiskFlag).delete()
         db.session.commit()
         
