@@ -596,6 +596,8 @@ def _get_user_from_request():
     from flask import request, session
     from flask_jwt_extended import decode_token
     from app.auth_utils import get_current_user
+    import logging
+    logger = logging.getLogger(__name__)
     
     # Try JWT Bearer token first
     auth_header = request.headers.get("Authorization", "")
@@ -608,7 +610,8 @@ def _get_user_from_request():
                 user = User.query.get(int(user_id))
                 if user:
                     return user
-        except Exception:
+        except Exception as e:
+            logger.warning(f"JWT decode failed: {str(e)}")
             pass
     
     # Fall back to session
