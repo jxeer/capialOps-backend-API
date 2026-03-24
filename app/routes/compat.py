@@ -1900,19 +1900,66 @@ def update_user(user_id):
     return jsonify(_to_gui(user.to_dict()))
 
 
+def _get_s3_url(file_key):
+    """Generate S3 URL for a given file key."""
+    bucket = os.environ.get("AWS_BUCKET_NAME", "capitalops")
+    region = os.environ.get("AWS_REGION", "us-east-1")
+    return f"https://{bucket}.s3.{region}.amazonaws.com/{file_key}"
+
+
+def _upload_to_s3(file_obj, file_key, mime_type):
+    """Upload a file object to S3 and return the URL."""
+    import boto3
+    import botocore.exceptions
+
+    bucket = os.environ.get("AWS_BUCKET_NAME")
+    access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    region = os.environ.get("AWS_REGION", "us-east-1")
+
+    if not bucket or not access_key or not secret_key:
+        return None, "AWS credentials not configured"
+
+    try:
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region,
+        )
+        s3.upload_fileobj(
+            file_obj,
+            bucket,
+            file_key,
+            ExtraArgs={"ContentType": mime_type}
+        )
+        return _get_s3_url(file_key), None
+    except botocore.exceptions.ClientError as e:
+        return None, str(e)
+    except Exception as e:
+        return None, str(e)
+
+
 @compat_bp.route("/upload", methods=["POST"])
 @_require_api_key
 def upload_media():
-    """Upload a media file and return a base64 data URL.
+    """Upload a media file to S3 and return the URL.
 
     Accepts either:
     - multipart/form-data with an 'image' field
     - JSON body with 'imageData' field containing base64-encoded image
 
-    Returns {url: "data:image/...;base64,..."} for direct use in img src.
+    Returns {url: "https://s3.../..."} for S3 uploads.
+    Falls back to base64 data URL if S3 is not configured.
     """
     import base64
     import io
+    import uuid
+
+    user_id = request.headers.get("X-User-ID", "anonymous")
+    file_name = None
+    file_data = None
+    mime_type = "image/jpeg"
 
     # Handle JSON body with base64 image
     if request.is_json:
@@ -1921,7 +1968,6 @@ def upload_media():
         if not image_data:
             return jsonify({"error": "No image provided"}), 400
 
-        # Decode base64
         try:
             if image_data.startswith("data:"):
                 header, encoded = image_data.split(",", 1)
@@ -1929,34 +1975,37 @@ def upload_media():
                 file_data = base64.b64decode(encoded)
             else:
                 file_data = base64.b64decode(image_data)
-                mime_type = "image/jpeg"
         except Exception:
             return jsonify({"error": "Invalid base64 data"}), 400
 
-        if len(file_data) > 5 * 1024 * 1024:
-            return jsonify({"error": "File too large (max 5MB)"}), 400
-
-        encoded_result = base64.b64encode(file_data).decode("utf-8")
-        data_url = f"data:{mime_type};base64,{encoded_result}"
-        return jsonify({"url": data_url, "key": data.get("name", "image")})
+        file_name = data.get("name", f"{user_id}-{uuid.uuid4().hex[:8]}.jpg")
 
     # Handle multipart form data
-    if "image" not in request.files:
-        return jsonify({"error": "No image provided"}), 400
+    else:
+        if "image" not in request.files:
+            return jsonify({"error": "No image provided"}), 400
 
-    file = request.files["image"]
-    if not file.filename:
-        return jsonify({"error": "Empty file"}), 400
+        file = request.files["image"]
+        if not file.filename:
+            return jsonify({"error": "Empty file"}), 400
 
-    file_data = file.read()
+        file_name = file.filename or f"{user_id}-{uuid.uuid4().hex[:8]}.jpg"
+        file_data = file.read()
+        mime_type = file.content_type or "image/jpeg"
+
     if len(file_data) > 5 * 1024 * 1024:
         return jsonify({"error": "File too large (max 5MB)"}), 400
 
-    mime_type = file.content_type or "image/jpeg"
     if not mime_type.startswith("image/"):
         return jsonify({"error": "Only image files allowed"}), 400
 
+    ext = file_name.split(".")[-1] if "." in file_name else "jpg"
+    file_key = f"media/{user_id}/{uuid.uuid4().hex[:12]}.{ext}"
+
+    s3_url, s3_error = _upload_to_s3(io.BytesIO(file_data), file_key, mime_type)
+    if s3_url:
+        return jsonify({"url": s3_url, "key": file_key})
+
     encoded = base64.b64encode(file_data).decode("utf-8")
     data_url = f"data:{mime_type};base64,{encoded}"
-
-    return jsonify({"url": data_url, "key": file.filename or "image"})
+    return jsonify({"url": data_url, "key": file_key})
