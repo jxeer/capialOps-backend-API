@@ -211,7 +211,7 @@ def _send_reset_email(user, token):
     try:
         resend.api_key = resend_api_key
         resend.Emails.send({
-            "from": "CapitalOps <noreply@capitalops.io>",
+            "from": "CapitalOps <onboarding@resend.dev>",
             "to": user.email,
             "subject": "Reset your CapitalOps password",
             "html": email_html,
