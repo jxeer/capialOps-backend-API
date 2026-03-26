@@ -13,6 +13,7 @@ Routes:
 """
 
 import os
+import logging
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required
 from app.models import User, PasswordResetToken
@@ -206,6 +207,7 @@ def _send_reset_email(user, token):
     """
 
     if not resend_api_key:
+        logging.warning(f"[Password Reset] RESEND_API_KEY not configured. Reset link for {user.email}: {reset_link}")
         return
 
     try:
@@ -216,7 +218,10 @@ def _send_reset_email(user, token):
             "subject": "Reset your CapitalOps password",
             "html": email_html,
         })
+        logging.info(f"[Password Reset] Email sent to {user.email}")
     except Exception as e:
+        logging.error(f"[Password Reset] Failed to send email to {user.email}: {e}")
+        logging.warning(f"[Password Reset] Reset link (fallback): {reset_link}")
         pass
 
 
