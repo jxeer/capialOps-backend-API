@@ -23,7 +23,8 @@ Data Flow (per blueprint):
 
 from app import db
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+import secrets
 
 
 class User(db.Model):
@@ -677,3 +678,48 @@ class Message(db.Model):
             "readAt": self.read_at.isoformat() if self.read_at else None,
             "createdAt": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class PasswordResetToken(db.Model):
+    """
+    A single-use password reset token sent to a user's email.
+
+    Tokens are generated when a user requests a password reset and are
+    valid for a limited time (default: 30 minutes). They are deleted
+    immediately after use or expiration.
+    """
+    __tablename__ = "password_reset_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", backref="password_reset_tokens")
+
+    @classmethod
+    def generate_token(cls, user_id, expiry_minutes=30):
+        """
+        Create a new reset token for the given user.
+
+        Args:
+            user_id: The ID of the user requesting the reset.
+            expiry_minutes: How long the token should be valid (default 30).
+
+        Returns:
+            PasswordResetToken: The newly created token instance.
+        """
+        token = secrets.token_urlsafe(48)
+        expires_at = datetime.utcnow() + timedelta(minutes=expiry_minutes)
+        return cls(
+            user_id=user_id,
+            token=token,
+            expires_at=expires_at,
+        )
+
+    @property
+    def is_valid(self):
+        """Return True if the token has not expired and has not been used."""
+        return not self.used and datetime.utcnow() < self.expires_at
