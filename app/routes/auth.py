@@ -16,7 +16,7 @@ import os
 import logging
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required
-from app.models import User, PasswordResetToken, MfaCode
+from app.models import User, PasswordResetToken
 from app.auth_utils import get_current_user
 
 auth_bp = Blueprint("auth", __name__)
@@ -62,8 +62,9 @@ def login():
     if not user.email:
         return jsonify({"error": "No email associated with account. Please contact support."}), 400
 
-    mfa_code = MfaCode.generate_code(user.id)
-    result = _send_mfa_email(user, mfa_code.code)
+    # Generate MFA code using PasswordResetToken (reused for MFA)
+    mfa_token = PasswordResetToken.generate_token(user.id, expiry_minutes=5)
+    result = _send_mfa_email(user, mfa_token.token)
 
     return jsonify({
         "mfaRequired": True,
@@ -79,7 +80,7 @@ def login_verify_mfa():
     Expects JSON body:
         {
             "username": "admin",
-            "code": "123456"
+            "code": "abc123..."  // the token from the MFA email
         }
 
     Returns on success (200):
@@ -100,15 +101,15 @@ def login_verify_mfa():
     if not user:
         return jsonify({"error": "Invalid username or code"}), 401
 
-    mfa_code = MfaCode.query.filter_by(
+    mfa_token = PasswordResetToken.query.filter_by(
         user_id=user.id, 
-        code=data["code"]
-    ).order_by(MfaCode.created_at.desc()).first()
+        token=data["code"]
+    ).order_by(PasswordResetToken.created_at.desc()).first()
 
-    if not mfa_code or not mfa_code.is_valid:
+    if not mfa_token or not mfa_token.is_valid:
         return jsonify({"error": "Invalid or expired MFA code"}), 401
 
-    mfa_code.used = True
+    mfa_token.used = True
     db.session.commit()
 
     access_token = create_access_token(
