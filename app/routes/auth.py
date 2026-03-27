@@ -64,6 +64,7 @@ def login():
 
     # Generate MFA code using PasswordResetToken (reused for MFA)
     mfa_token = PasswordResetToken.generate_token(user.id, expiry_minutes=5)
+    logging.warning(f"[MFA Login] Generated token for {user.username}: {mfa_token.token[:20]}...")
     result = _send_mfa_email(user, mfa_token.token)
 
     return jsonify({
@@ -101,10 +102,14 @@ def login_verify_mfa():
     if not user:
         return jsonify({"error": "Invalid username or code"}), 401
 
+    logging.warning(f"[MFA Verify] Looking for token: {data['code'][:20]}... for user {user.username} (id={user.id})")
+    
     mfa_token = PasswordResetToken.query.filter_by(
         user_id=user.id, 
         token=data["code"]
     ).order_by(PasswordResetToken.created_at.desc()).first()
+
+    logging.warning(f"[MFA Verify] Token found: {mfa_token}, is_valid: {mfa_token.is_valid if mfa_token else 'N/A'}")
 
     if not mfa_token or not mfa_token.is_valid:
         return jsonify({"error": "Invalid or expired MFA code"}), 401
