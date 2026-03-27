@@ -18,8 +18,6 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required
 from app.models import User, PasswordResetToken
 from app.auth_utils import get_current_user
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -198,7 +196,7 @@ def _send_reset_email(user, token):
         user: The User model instance to send the email to.
         token: The password reset token string.
     """
-    sendgrid_key = os.environ.get("SENDGRID_API_KEY")
+    resend_key = os.environ.get("RESEND_API_KEY")
     frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
     reset_link = f"{frontend_origin}/auth/reset-password?token={token}"
 
@@ -211,20 +209,20 @@ def _send_reset_email(user, token):
     <p>If you didn't request this, you can safely ignore this email.</p>
     """
 
-    if not sendgrid_key:
-        logging.warning(f"[Password Reset] SENDGRID_API_KEY not configured. Reset link for {user.email}: {reset_link}")
+    if not resend_key:
+        logging.warning(f"[Password Reset] RESEND_API_KEY not configured. Reset link for {user.email}: {reset_link}")
         return
 
     try:
-        sg = SendGridAPIClient(sendgrid_key)
-        message = Mail(
-            from_email="julian.xeer@gmail.com",
-            to_emails=user.email,
-            subject="Reset your CapitalOps password",
-            html_content=email_html
-        )
-        response = sg.send(message)
-        logging.info(f"[Password Reset] Email sent to {user.email}, status: {response.status_code}")
+        import resend
+        resend.api_key = resend_key
+        email = resend.Emails.send({
+            "from": "CapitalOps <noreply@capitalops.app>",
+            "to": [user.email],
+            "subject": "Reset your CapitalOps password",
+            "html": email_html
+        })
+        logging.info(f"[Password Reset] Email sent to {user.email}, id: {email}")
     except Exception as e:
         logging.error(f"[Password Reset] Failed to send email to {user.email}: {e}")
         logging.warning(f"[Password Reset] Reset link (fallback): {reset_link}")
