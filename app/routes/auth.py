@@ -214,7 +214,7 @@ def _send_reset_email(user, token):
     try:
         sg = SendGridAPIClient(sendgrid_key)
         message = Mail(
-            from_email="noreply@capitalops.vercel.app",
+            from_email="julian.xeer@gmail.com",
             to_emails=user.email,
             subject="Reset your CapitalOps password",
             html_content=email_html
