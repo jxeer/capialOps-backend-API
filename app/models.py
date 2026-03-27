@@ -711,13 +711,17 @@ class PasswordResetToken(db.Model):
         Returns:
             PasswordResetToken: The newly created token instance.
         """
+        from app import db
         token = secrets.token_urlsafe(48)
         expires_at = datetime.utcnow() + timedelta(minutes=expiry_minutes)
-        return cls(
+        reset_token = cls(
             user_id=user_id,
             token=token,
             expires_at=expires_at,
         )
+        db.session.add(reset_token)
+        db.session.commit()
+        return reset_token
 
     @property
     def is_valid(self):
