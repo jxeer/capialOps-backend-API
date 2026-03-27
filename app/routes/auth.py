@@ -131,10 +131,14 @@ def forgot_password():
     db.session.add(reset_token)
     db.session.commit()
 
+    frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173").split(",")[0]
+    reset_link = f"{frontend_origin}/auth/reset-password?token={reset_token.token}"
+
     _send_reset_email(user, reset_token.token)
 
     return jsonify({
-        "message": "If an account exists with a password, a reset email has been sent."
+        "message": "If an account exists with a password, a reset email has been sent.",
+        "reset_link": reset_link
     }), 200
 
 
