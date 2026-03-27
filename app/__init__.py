@@ -68,10 +68,21 @@ def create_app():
     access_token_minutes = int(os.environ.get("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", "60"))
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=access_token_minutes)
 
-    # Token location — only accept JWTs from the Authorization header (Bearer scheme)
-    app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+    # Token location — accept JWTs from BOTH Authorization header AND httpOnly cookies
+    # This allows clients to use cookie-based auth for XSS protection while maintaining
+    # Bearer token compatibility for API clients and the compat layer.
+    app.config["JWT_TOKEN_LOCATION"] = ["headers", "cookies"]
     app.config["JWT_HEADER_NAME"] = "Authorization"
     app.config["JWT_HEADER_TYPE"] = "Bearer"
+
+    # Cookie configuration for httpOnly JWT storage (XSS protection)
+    # These are used when the backend issues tokens via set_access_cookies()
+    cookie_name = os.environ.get("JWT_COOKIE_NAME", "capitalops_token")
+    app.config["JWT_ACCESS_COOKIE_NAME"] = cookie_name
+    app.config["JWT_ACCESS_COOKIE_PATH"] = "/"
+    app.config["JWT_ACCESS_COOKIE_HTTP_ONLY"] = True
+    app.config["JWT_ACCESS_COOKIE_SECURE"] = os.environ.get("ENVIRONMENT", "development") == "production"
+    app.config["JWT_ACCESS_COOKIE_SAME_SITE"] = "Lax"
 
     # PostgreSQL connection string - uses Railway PostgreSQL if DATABASE_URL is set
     db_url = os.environ.get("DATABASE_URL")

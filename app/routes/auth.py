@@ -161,10 +161,23 @@ def login_verify_mfa():
         additional_claims={"role": user.role},
     )
 
-    return jsonify({
+    # Set httpOnly, secure cookie for XSS protection
+    # The frontend can read the token from document.cookie if needed, but httpOnly
+    # prevents JavaScript from accessing it directly (XSS can't steal the token)
+    from flask import make_response
+    response = make_response(jsonify({
         "accessToken": access_token,
         "user": user.to_dict(),
-    })
+    }))
+    response.set_cookie(
+        "capitalops_token",
+        access_token,
+        httponly=True,
+        secure=True,
+        samesite="Lax",
+        max_age=60 * 60,  # 1 hour
+    )
+    return response
 
 
 def _send_mfa_email(user, code):
