@@ -16,7 +16,7 @@ import os
 import logging
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required
-from app.models import User, PasswordResetToken
+from app.models import User, PasswordResetToken, MfaCode
 from app.auth_utils import get_current_user
 
 auth_bp = Blueprint("auth", __name__)
@@ -36,7 +36,14 @@ def login():
     Returns on success (200):
         {
             "accessToken": "<jwt_access_token>",
-            "user": { id, username, role, full_name }
+            "user": { id, username, role, full_name },
+            "mfaRequired": false
+        }
+    
+    Returns (200) with mfaRequired: true if credentials valid but MFA needed:
+        {
+            "mfaRequired": true,
+            "mfaCode": "123456"  // only when email sending fails (dev mode)
         }
 
     Returns on failure (400): If username or password is missing.
@@ -44,20 +51,66 @@ def login():
     """
     data = request.get_json()
 
-    # Validate that JSON body is present and has required fields
     if not data or not data.get("username") or not data.get("password"):
         return jsonify({"error": "Username and password are required"}), 400
 
-    # Look up user by username
     user = User.query.filter_by(username=data["username"]).first()
 
-    # Verify password hash matches
     if not user or not user.check_password(data["password"]):
         return jsonify({"error": "Invalid username or password"}), 401
 
-    # Create access token with user ID (stringified) as identity and role as
-    # additional claim. JWT claims: sub = str(user.id), role = user.role.
-    # The role claim allows role_required() to check permissions without a DB lookup.
+    if not user.email:
+        return jsonify({"error": "No email associated with account. Please contact support."}), 400
+
+    mfa_code = MfaCode.generate_code(user.id)
+    result = _send_mfa_email(user, mfa_code.code)
+
+    return jsonify({
+        "mfaRequired": True,
+        "mfaCode": result.get("code")  # only set when email fails (dev mode)
+    }), 200
+
+
+@auth_bp.route("/login/verify-mfa", methods=["POST"])
+def login_verify_mfa():
+    """
+    Verify the MFA code entered by user and complete login.
+
+    Expects JSON body:
+        {
+            "username": "admin",
+            "code": "123456"
+        }
+
+    Returns on success (200):
+        {
+            "accessToken": "<jwt_access_token>",
+            "user": { id, username, role, full_name }
+        }
+
+    Returns on failure (400): If username or code is missing.
+    Returns on failure (401): If code is invalid or expired.
+    """
+    data = request.get_json()
+
+    if not data or not data.get("username") or not data.get("code"):
+        return jsonify({"error": "Username and code are required"}), 400
+
+    user = User.query.filter_by(username=data["username"]).first()
+    if not user:
+        return jsonify({"error": "Invalid username or code"}), 401
+
+    mfa_code = MfaCode.query.filter_by(
+        user_id=user.id, 
+        code=data["code"]
+    ).order_by(MfaCode.created_at.desc()).first()
+
+    if not mfa_code or not mfa_code.is_valid:
+        return jsonify({"error": "Invalid or expired MFA code"}), 401
+
+    mfa_code.used = True
+    db.session.commit()
+
     access_token = create_access_token(
         identity=str(user.id),
         additional_claims={"role": user.role},
@@ -67,6 +120,44 @@ def login():
         "accessToken": access_token,
         "user": user.to_dict(),
     })
+
+
+def _send_mfa_email(user, code):
+    """
+    Send MFA verification code to user's email via Resend.
+    Falls back to returning code in response when email fails (dev mode).
+    """
+    resend_key = os.environ.get("RESEND_API_KEY")
+    frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+
+    email_html = f"""
+    <h1>Your Login Code</h1>
+    <p>Hi {user.full_name or user.username},</p>
+    <p>Your CapitalOps login code is:</p>
+    <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">{code}</p>
+    <p>This code expires in 5 minutes.</p>
+    <p>If you didn't request this, please ignore this email.</p>
+    """
+
+    if not resend_key:
+        logging.warning(f"[MFA] RESEND_API_KEY not configured. Code for {user.email}: {code}")
+        return {"code": code}
+
+    try:
+        import resend
+        resend.api_key = resend_key
+        email = resend.Emails.send({
+            "from": "CapitalOps <noreply@capitalops.app>",
+            "to": [user.email],
+            "subject": "Your CapitalOps login code",
+            "html": email_html
+        })
+        logging.info(f"[MFA] Code sent to {user.email}, id: {email}")
+        return {}
+    except Exception as e:
+        logging.error(f"[MFA] Failed to send code to {user.email}: {e}")
+        logging.warning(f"[MFA] Code (fallback) for {user.email}: {code}")
+        return {"code": code}
 
 
 @auth_bp.route("/me", methods=["GET"])

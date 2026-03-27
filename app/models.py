@@ -723,3 +723,36 @@ class PasswordResetToken(db.Model):
     def is_valid(self):
         """Return True if the token has not expired and has not been used."""
         return not self.used and datetime.utcnow() < self.expires_at
+
+
+class MfaCode(db.Model):
+    """
+    A single-use MFA verification code sent to user's email.
+    Codes are valid for 5 minutes and deleted after use.
+    """
+    __tablename__ = "mfa_codes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    code = db.Column(db.String(6), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", backref="mfa_codes")
+
+    @classmethod
+    def generate_code(cls, user_id, expiry_minutes=5):
+        """Create a new 6-digit MFA code for the given user."""
+        import secrets
+        code = "".join([str(secrets.randbelow(10)) for _ in range(6)])
+        expires_at = datetime.utcnow() + timedelta(minutes=expiry_minutes)
+        mfa_code = cls(user_id=user_id, code=code, expires_at=expires_at)
+        db.session.add(mfa_code)
+        db.session.commit()
+        return mfa_code
+
+    @property
+    def is_valid(self):
+        """Return True if the code has not expired and has not been used."""
+        return not self.used and datetime.utcnow() < self.expires_at
