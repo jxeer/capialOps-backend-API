@@ -115,6 +115,7 @@ def login_verify_mfa():
         return jsonify({"error": "Invalid or expired MFA code"}), 401
 
     mfa_token.used = True
+    db = _get_db()
     db.session.commit()
 
     access_token = create_access_token(
