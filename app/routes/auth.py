@@ -108,6 +108,7 @@ def forgot_password():
         { "message": "If an account exists, a reset email has been sent." }
     Returns (400): If neither username nor email is provided.
     """
+    logging.warning("DEBUG: forgot-password endpoint called - code version 890a945")
     data = request.get_json()
 
     if not data:
