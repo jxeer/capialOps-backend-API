@@ -161,9 +161,9 @@ def login_verify_mfa():
         additional_claims={"role": user.role},
     )
 
-    # Set httpOnly, secure cookie for XSS protection
-    # The frontend can read the token from document.cookie if needed, but httpOnly
-    # prevents JavaScript from accessing it directly (XSS can't steal the token)
+    # Set cookie for XSS protection (not httpOnly - we need to read it for Bearer token)
+    # The cookie complements localStorage; user can also use localStorage token directly
+    # Secure flag ensures cookie only sent over HTTPS in production
     from flask import make_response
     response = make_response(jsonify({
         "accessToken": access_token,
@@ -172,7 +172,7 @@ def login_verify_mfa():
     response.set_cookie(
         "capitalops_token",
         access_token,
-        httponly=True,
+        httponly=False,  # Must be False so JS can read for Bearer token auth
         secure=True,
         samesite="Lax",
         max_age=60 * 60,  # 1 hour
