@@ -22,6 +22,7 @@ Data Flow (per blueprint):
 """
 
 from app import db
+from app.utils.encryption import EncryptedString
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 import secrets
@@ -414,6 +415,13 @@ class Investor(db.Model):
     tier_level = db.Column(db.String(20))               # "Tier 1" or "Tier 2"
     status = db.Column(db.String(50))                   # Active or Pending
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Encrypted PII/financial fields
+    tax_id = db.Column(EncryptedString(20))             # SSN or EIN
+    date_of_birth = db.Column(EncryptedString(20))     # DOB
+    phone = db.Column(EncryptedString(20))              # Contact phone
+    bank_account_number = db.Column(EncryptedString(50))  # Bank account for distributions
+    routing_number = db.Column(EncryptedString(20))     # Bank routing number
 
     # One investor can have multiple allocations across deals
     allocations = db.relationship("Allocation", backref="investor", lazy=True)
