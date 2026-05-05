@@ -364,10 +364,13 @@ def seed_demo_data():
         )
         admin.set_password("admin123")
         db.session.add(admin)
+        db.session.flush()  # Flush to generate admin.id before Portfolio creation
 
     # Guard: Only seed demo data if database is completely empty
     if User.query.count() > 1:  # More than just the admin we just created
         return
+
+    admin = User.query.filter_by(username="admin").first()
 
     # Project Manager — access to Execution Control only
     pm = User(
@@ -392,7 +395,8 @@ def seed_demo_data():
     # --- Portfolio ---
     # Top-level entity; all assets/projects belong to a portfolio.
     # PortfolioID is included on all entities to enable future multi-portfolio scaling.
-    portfolio = Portfolio(name="Core Portfolio", description="Primary real estate development portfolio")
+    # user_id is set to admin.id (created above) to satisfy NOT NULL constraint.
+    portfolio = Portfolio(user_id=admin.id, name="Core Portfolio", description="Primary real estate development portfolio")
     db.session.add(portfolio)
     db.session.flush()  # Flush to generate portfolio.id for foreign keys
 
