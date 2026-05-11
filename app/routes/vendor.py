@@ -46,6 +46,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from app import db
 from app.models import Vendor, WorkOrder, Asset, Portfolio, FieldMedia
 from app.auth_utils import role_required
+from app.notifications import create_notification
 import boto3
 import botocore.exceptions
 import uuid
@@ -304,11 +305,26 @@ def update_work_order(wo_id):
     """
     wo = WorkOrder.query.get_or_404(wo_id)
     data = request.get_json() or {}
+    previous_vendor_id = wo.vendor_id
 
     if "status" in data:
         wo.status = data["status"]
     if "cost" in data:
         wo.cost = data["cost"]
+
+    new_vendor_id = data.get("vendor_id")
+    if new_vendor_id and new_vendor_id != previous_vendor_id:
+        wo.vendor_id = new_vendor_id
+        new_vendor = Vendor.query.get(new_vendor_id)
+        if new_vendor:
+            create_notification(
+                user_id=new_vendor.asset.user_id,
+                notification_type="work_order_assigned",
+                title=f"New Work Order Assigned: {wo.type}",
+                body=f"A new {wo.type} work order has been assigned to {new_vendor.name}.",
+                related_entity_type="work_order",
+                related_entity_id=wo.id
+            )
 
     db.session.commit()
     return jsonify({"work_order": wo.to_dict()})

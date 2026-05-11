@@ -24,8 +24,9 @@ Routes:
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 from app import db
-from app.models import EntitlementRecord, PermitEvent, Notification
+from app.models import EntitlementRecord, PermitEvent, Notification, User
 from app.auth_utils import role_required
+from app.notifications import create_notification
 
 entitlement_bp = Blueprint("entitlement", __name__)
 
@@ -197,6 +198,19 @@ def update_entitlement(entitlement_record_id):
             source="manual"
         )
         db.session.add(event)
+
+        project = record.project
+        if project and project.pm_assigned:
+            pm_user = User.query.filter_by(full_name=project.pm_assigned).first()
+            if pm_user:
+                create_notification(
+                    user_id=pm_user.id,
+                    notification_type="entitlement_update",
+                    title=f"Entitlement Status Changed: {record.entitlement_type}",
+                    body=f"The {record.entitlement_type} for {project.name} has changed from '{previous_status}' to '{data['status']}'.",
+                    related_entity_type="entitlement_record",
+                    related_entity_id=record.id
+                )
 
     if "hearing_date" in data:
         from datetime import datetime
