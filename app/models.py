@@ -887,12 +887,219 @@ class MfaCode(db.Model):
     def is_valid(self):
         """
         Check if the MFA code is valid for verification.
-        
+
         A code is valid if:
         - It has not been marked as used (single-use)
         - It has not expired (checked against current UTC time)
-        
+
         Returns:
             bool: True if valid, False otherwise
         """
         return not self.used and datetime.utcnow() < self.expires_at
+
+
+class EntitlementRecord(db.Model):
+    """
+    A permit or entitlement application tied to a project.
+
+    Represents official filings with government agencies for construction permits,
+    rezoning, variances, site plan approvals, etc. This data is typically scraped
+    from county/city permit portals and linked back to projects.
+
+    Attributes:
+        id: Primary key
+        project_id: Foreign key to projects table
+        parcel_number: Parcel identifier from the county/city
+        agency: Issuing agency (e.g., "Miami-Dade County", "City of Austin")
+        application_number: Agency's application/permit number
+        entitlement_type: Type of entitlement (rezoning, variance, site plan, etc.)
+        status: Current status in the approval process
+        submitted_date: Date the application was submitted
+        hearing_date: Scheduled hearing date (if applicable)
+        approved_date: Date of final approval (if approved)
+        notes: Additional notes or context
+        source_url: URL to the original record on the agency portal
+    """
+    __tablename__ = "entitlement_records"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+    parcel_number = db.Column(db.String(100), nullable=False)
+    agency = db.Column(db.String(200), nullable=False)
+    application_number = db.Column(db.String(100), nullable=False)
+    entitlement_type = db.Column(db.String(100), nullable=False)
+    status = db.Column(db.String(50), nullable=False)
+    submitted_date = db.Column(db.Date, nullable=False)
+    hearing_date = db.Column(db.Date, nullable=True)
+    approved_date = db.Column(db.Date, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    source_url = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    project = db.relationship("Project", backref="entitlement_records")
+    events = db.relationship("PermitEvent", backref="entitlement_record", lazy=True, cascade="all, delete-orphan")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "parcel_number": self.parcel_number,
+            "agency": self.agency,
+            "application_number": self.application_number,
+            "entitlement_type": self.entitlement_type,
+            "status": self.status,
+            "submitted_date": self.submitted_date.isoformat() if self.submitted_date else None,
+            "hearing_date": self.hearing_date.isoformat() if self.hearing_date else None,
+            "approved_date": self.approved_date.isoformat() if self.approved_date else None,
+            "notes": self.notes,
+            "source_url": self.source_url,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class PermitEvent(db.Model):
+    """
+    A status change or update on an EntitlementRecord.
+
+    Events are written by the scraper when it detects a change, or by a user
+    who manually enters an update. Each event captures the before/after state.
+
+    Attributes:
+        id: Primary key
+        entitlement_record_id: Foreign key to entitlement_records
+        event_type: Type of event (status_change, hearing_scheduled, approved, denied)
+        previous_value: Previous value before the change
+        new_value: New value after the change
+        detected_at: When the event was detected/created
+        source: Origin of the event ("scraper" or "manual")
+    """
+    __tablename__ = "permit_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    entitlement_record_id = db.Column(db.Integer, db.ForeignKey("entitlement_records.id"), nullable=False)
+    event_type = db.Column(db.String(50), nullable=False)
+    previous_value = db.Column(db.String(200), nullable=True)
+    new_value = db.Column(db.String(200), nullable=True)
+    detected_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    source = db.Column(db.String(20), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "entitlement_record_id": self.entitlement_record_id,
+            "event_type": self.event_type,
+            "previous_value": self.previous_value,
+            "new_value": self.new_value,
+            "detected_at": self.detected_at.isoformat() if self.detected_at else None,
+            "source": self.source,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class FieldMedia(db.Model):
+    """
+    A photo or video uploaded by a vendor tied to a project or work order.
+
+    Media files are stored in S3. This model tracks the S3 key, bucket, and
+    metadata. Either project_id or work_order_id must be set.
+
+    Attributes:
+        id: Primary key
+        project_id: Foreign key to projects (optional)
+        work_order_id: Foreign key to work_orders (optional)
+        uploaded_by_user_id: Foreign key to users
+        media_type: Type of media ("photo" or "video")
+        s3_key: S3 object key
+        s3_bucket: S3 bucket name
+        filename: Original filename
+        caption: Optional caption/description
+        uploaded_at: When the file was uploaded
+    """
+    __tablename__ = "field_media"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
+    work_order_id = db.Column(db.Integer, db.ForeignKey("work_orders.id"), nullable=True)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    media_type = db.Column(db.String(20), nullable=False)
+    s3_key = db.Column(db.String(500), nullable=False)
+    s3_bucket = db.Column(db.String(200), nullable=False)
+    filename = db.Column(db.String(300), nullable=False)
+    caption = db.Column(db.String(500), nullable=True)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    project = db.relationship("Project", backref="field_media")
+    work_order = db.relationship("WorkOrder", backref="field_media")
+    uploaded_by_user = db.relationship("User", backref="uploaded_media")
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "project_id IS NOT NULL OR work_order_id IS NOT NULL",
+            name="check_field_media_project_or_work_order"
+        ),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "work_order_id": self.work_order_id,
+            "uploaded_by_user_id": self.uploaded_by_user_id,
+            "media_type": self.media_type,
+            "s3_key": self.s3_key,
+            "s3_bucket": self.s3_bucket,
+            "filename": self.filename,
+            "caption": self.caption,
+            "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Notification(db.Model):
+    """
+    An alert sent to a user.
+
+    Notifications are created by the system when relevant events occur,
+    such as entitlement updates, permit events, or work order assignments.
+
+    Attributes:
+        id: Primary key
+        user_id: Foreign key to users
+        notification_type: Type of notification (entitlement_update, permit_event, etc.)
+        title: Short title for the notification
+        body: Full notification text
+        related_entity_type: Type of related entity (e.g., "entitlement_record")
+        related_entity_id: ID of the related entity
+        is_read: Whether the user has read this notification
+        created_at: When the notification was created
+    """
+    __tablename__ = "notifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    notification_type = db.Column(db.String(50), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    related_entity_type = db.Column(db.String(50), nullable=True)
+    related_entity_id = db.Column(db.Integer, nullable=True)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", backref="notifications")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "notification_type": self.notification_type,
+            "title": self.title,
+            "body": self.body,
+            "related_entity_type": self.related_entity_type,
+            "related_entity_id": self.related_entity_id,
+            "is_read": self.is_read,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
