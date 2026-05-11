@@ -2,6 +2,41 @@
 
 ## Recent Changes
 
+### Entitlement Polling Service (May 2026)
+
+**Purpose:** Background job that monitors Accela and ArcGIS for permit/entitlement status changes and writes them to the DB.
+
+**New Files:**
+- `app/services/accela_client.py` - Accela API wrapper with OAuth2 token caching
+- `app/services/arcgis_client.py` - ArcGIS FeatureServer query helper
+- `app/services/entitlement_poller.py` - APScheduler job that polls and detects changes
+
+**Data Sources:**
+- Accela Civic Platform API (Hillsborough + Pinellas counties) — workflow status, inspections
+- ArcGIS REST (Hillsborough + Pinellas) — hearing schedules
+
+**Automated Behavior:**
+- Status change → creates PermitEvent + notifies PM
+- New hearing date → creates PermitEvent + notifies PM
+- New inspections from Accela → creates PermitEvent + notifies PM
+
+**Scheduler:** BackgroundScheduler runs every 30 min (configurable via `POLLER_INTERVAL_MINUTES`).
+
+**Manual Trigger:** `POST /api/v1/entitlement/poll/trigger` (Sponsor Admin only)
+
+**Env Vars Required:**
+```
+POLLER_INTERVAL_MINUTES=30
+ACCELA_BASE_URL=https://apis.accela.com
+ACCELA_CLIENT_ID=       # From developer.accela.com
+ACCELA_CLIENT_SECRET=   # From developer.accela.com
+ACCELA_HILLSBOROUGH_AGENCY=hillsboroughcountyfl
+ACCELA_PINELLAS_AGENCY=pinellascountyfl
+HILLSBOROUGH_ARCGIS_HEARINGS_URL=   # ArcGIS FeatureServer URL
+PINELLAS_ARCGIS_HEARINGS_URL=       # ArcGIS FeatureServer URL
+ARCGIS_PARCEL_FIELD=PARCEL_NUM
+```
+
 ### Entitlements & Notifications (May 2026)
 
 **Purpose:** Track permits/entitlements for projects with event history, and notify users of changes.
