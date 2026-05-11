@@ -10,7 +10,7 @@ Routes:
 """
 
 import os
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
 from app import db
 from app.auth_utils import get_current_user
@@ -24,10 +24,7 @@ def seed_demo_data_endpoint():
     """
     Force re-seed demo data for development.
 
-    Requires admin role and a dev secret header.
-
-    Headers:
-        X-Dev-Secret: must match DEV_SECRET env var (or 'dev-secret' in dev)
+    Requires admin role.
 
     Returns:
         JSON with seed status
@@ -35,11 +32,6 @@ def seed_demo_data_endpoint():
     user = get_current_user()
     if user.role != "sponsor_admin":
         return jsonify({"error": "Admin access required"}), 403
-
-    dev_secret = request.headers.get("X-Dev-Secret", "")
-    expected = os.environ.get("DEV_SECRET", "dev-secret")
-    if dev_secret != expected and dev_secret != "dev-secret":
-        return jsonify({"error": "Invalid dev secret"}), 401
 
     from app import seed_demo_data as _seed
     _seed(force=True)
