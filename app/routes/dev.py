@@ -33,13 +33,20 @@ def seed_demo_data_endpoint():
     if user.role != "sponsor_admin":
         return jsonify({"error": "Admin access required"}), 403
 
-    from app import seed_demo_data as _seed
-    _seed(force=True)
-
-    return jsonify({
-        "status": "success",
-        "message": "Demo data seeded successfully"
-    })
+    try:
+        from app import seed_demo_data as _seed
+        _seed(force=True)
+        return jsonify({
+            "status": "success",
+            "message": "Demo data seeded successfully"
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "status": "error",
+            "error": str(e),
+            "trace": traceback.format_exc()
+        }), 500
 
 
 @dev_bp.route("/status", methods=["GET"])
