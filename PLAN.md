@@ -2,6 +2,13 @@
 
 ## Recent Changes
 
+### Cleanup (May 2026)
+- `tmp_gui/` directory deleted from API repo (accidental GUI copy committed to backend repo)
+- `__MACOSX/` and `~~/` artifacts removed from GUI repo tracking
+- `.DS_Store` removed from tracking in both repos
+- `.env` removed from tracking in GUI repo
+- Backend PLAN.md updated with architecture notes confirming no fallback storage for new features
+
 ### Entitlement Polling Service (May 2026)
 
 **Purpose:** Background job that monitors Accela and ArcGIS for permit/entitlement status changes and writes them to the DB.
@@ -185,12 +192,6 @@ Credentials: `admin` / `admin123`
 - **capitalOps-API** (Flask/SQLAlchemy/PostgreSQL): All backend features. All new features (entitlements, field media, notifications, poller, encryption) live here only.
 - **capitalOps-GUI** (React/Vite): Frontend. The `server/` directory contains an Express dev proxy to Flask API (in-memory storage is NOT used for new features — only as fallback for older routes if Flask is unreachable).
 - **No fallback storage for new features**: Entitlements, field media, and notifications exist only in the Flask API and have no in-memory fallback.
-
-### Cleanup (May 2026)
-- `tmp_gui/` directory deleted from API repo (accidental GUI copy committed to backend repo)
-- `__MACOSX/` and `~~/` artifacts removed from GUI repo tracking
-- `.DS_Store` removed from tracking in both repos
-- `.env` removed from tracking in GUI repo
 
 ---
 
