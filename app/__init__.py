@@ -186,6 +186,7 @@ def create_app():
     from app.routes.compat import compat_bp
     from app.routes.dev import dev_bp
     from app.routes.entitlement import entitlement_bp
+    from app.routes.reports import reports_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
     app.register_blueprint(google_auth_bp, url_prefix="/api/v1/auth/google")
@@ -197,6 +198,7 @@ def create_app():
     app.register_blueprint(vendor_bp, url_prefix="/api/v1/vendor")
     app.register_blueprint(dev_bp, url_prefix="/api/v1/dev")
     app.register_blueprint(entitlement_bp, url_prefix="/api/v1/entitlement")
+    app.register_blueprint(reports_bp, url_prefix="/api/v1/reports")
 
     # GUI compatibility layer — serves flat REST endpoints at /api/ matching
     # the response format expected by the frontend GUI's Express proxy.
