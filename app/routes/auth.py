@@ -25,7 +25,7 @@ import logging
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required
 from app.models import User, PasswordResetToken, MfaCode
-from app.auth_utils import get_current_user
+from app.auth_utils import get_current_user, role_required
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -274,6 +274,34 @@ def me():
     if not user:
         return jsonify({"error": "User not found"}), 404
     return jsonify({"user": user.to_dict()})
+
+
+@auth_bp.route("/users", methods=["GET"])
+@jwt_required()
+@role_required("sponsor_admin")
+def list_users():
+    """
+    Return all users on the platform (for recipient picker in reports).
+
+    Requires sponsor_admin role.
+
+    Returns (200):
+        { "users": [ { id, full_name, email, role }, ... ] }
+
+    Returns (403): Non-admin user
+    """
+    users = User.query.order_by(User.full_name.asc()).all()
+    return jsonify({
+        "users": [
+            {
+                "id": u.id,
+                "full_name": u.full_name,
+                "email": u.email,
+                "role": u.role,
+            }
+            for u in users
+        ]
+    })
 
 
 # =============================================================================
