@@ -364,11 +364,13 @@ def seed_demo_data(force=False):
         db.session.add(admin)
         db.session.flush()  # Flush to generate admin.id before Portfolio creation
 
-    # If the admin email is still the placeholder, update it to a real address
+    # If the admin email is still the placeholder and no other user has the target address, update it
     admin_user = User.query.filter_by(username="admin").first()
     if admin_user and admin_user.email == "admin@capitalops.io":
-        admin_user.email = "julian.xeer@gmail.com"
-        db.session.commit()
+        other_user = User.query.filter_by(email="julian.xeer@gmail.com").first()
+        if not other_user:
+            admin_user.email = "julian.xeer@gmail.com"
+            db.session.commit()
 
     # Guard: Only seed demo data if database is completely empty (or force=True)
     if not force and User.query.count() > 1:  # More than just the admin we just created
