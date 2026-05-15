@@ -264,9 +264,12 @@ def create_app():
             if "code_hash" not in mfa_cols:
                 db.session.execute(text("ALTER TABLE mfa_codes ADD COLUMN code_hash VARCHAR(64) NOT NULL DEFAULT ''"))
                 db.session.commit()
-                # Backfill code_hash from plaintext code for any existing rows
-                db.session.execute(text("UPDATE mfa_codes SET code_hash = encode(sha256(code::bytea), 'hex') WHERE code IS NOT NULL AND code_hash = ''"))
-                db.session.commit()
+                # Backfill code_hash from plaintext code (PostgreSQL-specific cast)
+                try:
+                    db.session.execute(text("UPDATE mfa_codes SET code_hash = encode(sha256(code::bytea), 'hex') WHERE code IS NOT NULL AND code_hash = ''"))
+                    db.session.commit()
+                except Exception:
+                    pass  # Not PostgreSQL or token column already gone — skip backfill
             if "failed_attempts" not in mfa_cols:
                 db.session.execute(text("ALTER TABLE mfa_codes ADD COLUMN failed_attempts INTEGER DEFAULT 0"))
             # Drop obsolete 'code' column if present (pre-hash-migration leftover).
@@ -276,6 +279,24 @@ def create_app():
                     db.session.execute(text("ALTER TABLE mfa_codes DROP COLUMN code"))
                 except Exception:
                     pass  # SQLite: no-op; PostgreSQL uses code_hash only from here on
+
+        # password_reset_tokens: ensure token_hash column exists (same migration issue as mfa_codes)
+        if inspector.has_table("password_reset_tokens"):
+            prt_cols = {col["name"] for col in inspector.get_columns("password_reset_tokens")}
+            if "token_hash" not in prt_cols:
+                db.session.execute(text("ALTER TABLE password_reset_tokens ADD COLUMN token_hash VARCHAR(64) NOT NULL DEFAULT ''"))
+                db.session.commit()
+                # Backfill token_hash from plaintext token (PostgreSQL-specific cast)
+                try:
+                    db.session.execute(text("UPDATE password_reset_tokens SET token_hash = encode(sha256(token::bytea), 'hex') WHERE token IS NOT NULL AND token_hash = ''"))
+                    db.session.commit()
+                except Exception:
+                    pass  # Not PostgreSQL or token column already gone — skip backfill
+            if "token" in prt_cols:
+                try:
+                    db.session.execute(text("ALTER TABLE password_reset_tokens DROP COLUMN token"))
+                except Exception:
+                    pass
 
         db.session.commit()
 
