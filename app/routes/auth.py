@@ -222,7 +222,7 @@ def _send_mfa_email(user, code):
         
         # Send email via Resend
         email = resend.Emails.send({
-            "from": "CapitalOps <noreply@capitalops.app>",
+            "from": "CapitalOps <noreply@capitalops.vercel.app>",
             "to": [user.email],
             "subject": "Your CapitalOps login code",
             "html": email_html
@@ -484,7 +484,7 @@ def _send_reset_email(user, token):
         
         # Send password reset email via Resend
         email = resend.Emails.send({
-            "from": "CapitalOps <noreply@capitalops.app>",
+            "from": "CapitalOps <noreply@capitalops.vercel.app>",
             "to": [user.email],
             "subject": "Reset your CapitalOps password",
             "html": email_html
