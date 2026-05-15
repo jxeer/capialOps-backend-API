@@ -257,6 +257,7 @@ def _get_user_or_none():
         return None
 
 
+@_require_api_key
 @compat_bp.route("/user", methods=["GET"])
 def get_user():
     """Return the current authenticated user from JWT token or session."""
@@ -291,6 +292,7 @@ def update_user_profile():
 # Dashboard Stats
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/dashboard/stats", methods=["GET"])
 def dashboard_stats():
     """Return aggregated stats for the current user, or global if not authenticated.
@@ -347,6 +349,7 @@ def dashboard_stats():
 # Portfolios
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/portfolios", methods=["GET"])
 def list_portfolios():
     """Return all portfolios for the current user, or global portfolios if not authenticated."""
@@ -368,6 +371,7 @@ def list_portfolios():
 # Assets
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/assets", methods=["GET"])
 def list_assets():
     """Return all assets for the current user's portfolio, or global assets if not authenticated."""
@@ -382,6 +386,7 @@ def list_assets():
     return jsonify([_to_gui(a.to_dict()) for a in assets])
 
 
+@_require_api_key
 @compat_bp.route("/assets/<int:asset_id>", methods=["GET"])
 def get_asset(asset_id):
     """Return a single asset by ID."""
@@ -433,6 +438,7 @@ def create_asset():
 # Projects
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/projects", methods=["GET"])
 def list_projects():
     """Return all projects for the current user's portfolio, or global projects if not authenticated."""
@@ -447,6 +453,7 @@ def list_projects():
     return jsonify([_to_gui(p.to_dict()) for p in projects])
 
 
+@_require_api_key
 @compat_bp.route("/projects/<int:project_id>", methods=["GET"])
 def get_project(project_id):
     """Return a single project by ID."""
@@ -504,6 +511,7 @@ def create_project():
 # Deals
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/deals", methods=["GET"])
 def list_deals():
     """Return all deals for the current user's portfolio, or global deals if not authenticated."""
@@ -518,6 +526,7 @@ def list_deals():
     return jsonify([_to_gui(d.to_dict()) for d in deals])
 
 
+@_require_api_key
 @compat_bp.route("/deals/<int:deal_id>", methods=["GET"])
 def get_deal(deal_id):
     """Return a single deal by ID."""
@@ -568,6 +577,7 @@ def create_deal():
 # Investors
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/investors", methods=["GET"])
 def list_investors():
     """Return all investors for the current user, or global investors if not authenticated."""
@@ -581,6 +591,7 @@ def list_investors():
     return jsonify([_to_gui(i.to_dict()) for i in investors])
 
 
+@_require_api_key
 @compat_bp.route("/investors/<int:investor_id>", methods=["GET"])
 def get_investor(investor_id):
     """Return a single investor by ID."""
@@ -626,6 +637,7 @@ def create_investor():
 # Allocations
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/allocations", methods=["GET"])
 def list_allocations():
     """Return all allocations for the current user's portfolio, or global if not authenticated."""
@@ -680,6 +692,7 @@ def create_allocation():
 # Milestones
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/milestones", methods=["GET"])
 def list_milestones():
     """Return all milestones for the current user's portfolio, or global if not authenticated."""
@@ -694,6 +707,7 @@ def list_milestones():
     return jsonify([_to_gui(m.to_dict()) for m in milestones])
 
 
+@_require_api_key
 @compat_bp.route("/milestones/project/<int:project_id>", methods=["GET"])
 def milestones_by_project(project_id):
     """Return milestones filtered by project ID."""
@@ -734,6 +748,7 @@ def create_milestone():
 # Vendors
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/vendors", methods=["GET"])
 def list_vendors():
     """Return all vendors for the current user's portfolio, or global if not authenticated."""
@@ -749,6 +764,7 @@ def list_vendors():
     return jsonify([_to_gui(v.to_dict()) for v in vendors])
 
 
+@_require_api_key
 @compat_bp.route("/vendors/<int:vendor_id>", methods=["GET"])
 def get_vendor(vendor_id):
     """Return a single vendor by ID."""
@@ -787,6 +803,7 @@ def create_vendor():
 # Work Orders
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/work-orders", methods=["GET"])
 def list_work_orders():
     """Return all work orders for the current user's portfolio, or global if not authenticated."""
@@ -801,6 +818,7 @@ def list_work_orders():
     return jsonify([_to_gui(wo.to_dict()) for wo in work_orders])
 
 
+@_require_api_key
 @compat_bp.route("/work-orders/vendor/<int:vendor_id>", methods=["GET"])
 def work_orders_by_vendor(vendor_id):
     """Return work orders filtered by vendor ID."""
@@ -841,6 +859,7 @@ def create_work_order():
 # Risk Flags
 # ---------------------------------------------------------------------------
 
+@_require_api_key
 @compat_bp.route("/risk-flags", methods=["GET"])
 def list_risk_flags():
     """Return all risk flags for the current user's portfolio, or global if not authenticated."""
@@ -855,6 +874,7 @@ def list_risk_flags():
     return jsonify([_to_gui(r.to_dict()) for r in risk_flags])
 
 
+@_require_api_key
 @compat_bp.route("/risk-flags/project/<int:project_id>", methods=["GET"])
 def risk_flags_by_project(project_id):
     """Return risk flags filtered by project ID."""
@@ -1195,6 +1215,7 @@ def delete_risk_flag(rf_id):
 #     """Handle file uploads for profile avatars."""
 #     ...
 
+@_require_api_key
 @compat_bp.route("/connection-requests", methods=["GET"])
 @_require_api_key
 def list_connection_requests():
@@ -1289,6 +1310,7 @@ def delete_connection_request(req_id):
     return jsonify({"deleted": True})
 
 
+@_require_api_key
 @compat_bp.route("/connections", methods=["GET"])
 @_require_api_key
 def list_connections():
@@ -1311,6 +1333,7 @@ def list_connections():
     return jsonify(connections)
 
 
+@_require_api_key
 @compat_bp.route("/connection-pending", methods=["GET"])
 @_require_api_key
 def list_pending_requests():
@@ -1323,6 +1346,7 @@ def list_pending_requests():
     return jsonify([r.to_dict() for r in requests])
 
 
+@_require_api_key
 @compat_bp.route("/conversations", methods=["GET"])
 @_require_api_key
 def list_conversations():
@@ -1371,6 +1395,7 @@ def create_conversation():
     return jsonify(conv.to_dict()), 201
 
 
+@_require_api_key
 @compat_bp.route("/messages", methods=["GET"])
 @_require_api_key
 def list_messages():
