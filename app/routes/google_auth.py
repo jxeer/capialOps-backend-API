@@ -44,8 +44,8 @@ Environment Variables:
 import os
 import logging
 
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token
+from flask import Blueprint, request, jsonify, redirect
+from flask_jwt_extended import create_access_token, set_access_cookies
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 
@@ -292,17 +292,15 @@ def google_callback():
     # Issue a CapitalOps JWT with the same structure as the /login endpoint
     access_token = create_access_token(identity=str(user.id), additional_claims={"role": user.role})
 
-    # Redirect to frontend with token in URL fragment (more secure than query param)
-    # The frontend's JS reads window.location.hash to extract the token
+    # Redirect to frontend with token in URL fragment — the cookie handles auth
+    # The fragment (#) is never sent to the server, so it's more secure than query params
     frontend_url = os.environ.get("FRONTEND_ORIGIN", "https://capitalops.vercel.app")
     if frontend_url == "*":
         frontend_url = "https://capitalops.vercel.app"
 
-    import urllib.parse
-    redirect_url = f"{frontend_url}?google_token={access_token}"
-
-    from flask import redirect
-    return redirect(redirect_url)
+    response = redirect(f"{frontend_url}/auth/callback#google_token={access_token}")
+    set_access_cookies(response, access_token)
+    return response
 
 
 @google_auth_bp.route("/", methods=["POST"])
@@ -496,8 +494,12 @@ def google_login():
         additional_claims={"role": user.role},
     )
 
-    return jsonify({
+    from flask import make_response
+
+    response = make_response(jsonify({
         "accessToken": access_token,
         "user": user.to_dict(),
         "isNewUser": is_new_user,
-    })
+    }))
+    set_access_cookies(response, access_token)
+    return response

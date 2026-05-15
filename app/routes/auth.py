@@ -14,16 +14,17 @@ IMPORTANT SECURITY NOTES:
 
 Routes:
     POST /api/v1/auth/login              — Authenticate (returns MFA required or JWT)
-    POST /api/v1/auth/login/verify-mfa    — Verify MFA code and receive JWT
-    GET  /api/v1/auth/me                  — Get current user's profile (requires JWT)
-    POST /api/v1/auth/forgot-password     — Generate password reset token
-    POST /api/v1/auth/reset-password      — Validate token and reset password
+    POST /api/v1/auth/login/verify-mfa  — Verify MFA code and receive JWT
+    GET  /api/v1/auth/me                — Get current user's profile (requires JWT)
+    POST /api/v1/auth/logout            — Log out (clears httpOnly JWT cookie)
+    POST /api/v1/auth/forgot-password   — Generate password reset token
+    POST /api/v1/auth/reset-password    — Validate token and reset password
 """
 
 import os
 import logging
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, jwt_required
+from flask_jwt_extended import create_access_token, jwt_required, set_access_cookies, unset_jwt_cookies
 from app.models import User, PasswordResetToken, MfaCode
 from app.auth_utils import get_current_user, role_required
 
@@ -159,23 +160,13 @@ def login_verify_mfa():
         additional_claims={"role": user.role},
     )
 
-    # Set cookie for XSS protection (not httpOnly - we need to read it for Bearer token)
-    # The cookie complements localStorage; user can also use localStorage token directly
-    # Secure flag ensures cookie only sent over HTTPS in production
-    from flask import make_response
-    response = make_response(jsonify({
+    # Use httpOnly cookie for auth — XSS cannot read the cookie
+    response = jsonify({
         "accessToken": access_token,
         "user": user.to_dict(),
-    }))
-    response.set_cookie(
-        "capitalops_token",
-        access_token,
-        httponly=False,  # Must be False so JS can read for Bearer token auth
-        secure=True,
-        samesite="Lax",
-        max_age=60 * 60,  # 1 hour
-    )
-    return response
+    })
+    set_access_cookies(response, access_token)
+    return response, 200
 
 
 def _send_mfa_email(user, code):
@@ -495,6 +486,20 @@ def _send_reset_email(user, token):
         # If email sending fails, log the link as fallback for debugging
         logging.error(f"[Password Reset] Failed to send email to {user.email}: {e}")
         logging.warning(f"[Password Reset] Reset link (fallback): {reset_link}")
+
+
+@auth_bp.route("/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    """
+    Log out the current user by clearing the httpOnly JWT cookie.
+
+    Returns (200):
+        { "message": "Logged out successfully" }
+    """
+    response = jsonify({"message": "Logged out successfully"})
+    unset_jwt_cookies(response)
+    return response
 
 
 def _get_db():
