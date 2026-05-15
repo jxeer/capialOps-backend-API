@@ -207,28 +207,23 @@ def compat_register():
 # ---------------------------------------------------------------------------
 
 def _get_user_from_request():
-    """Extract user from request - checks JWT Bearer token or Flask session."""
+    """Extract user from request - checks JWT Bearer token or httpOnly cookie."""
     from flask import request, session
-    from flask_jwt_extended import decode_token
+    from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
     from app.auth_utils import get_current_user
     import logging
     logger = logging.getLogger(__name__)
-    
-    # Try JWT Bearer token first
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        try:
-            decoded = decode_token(token)
-            user_id = decoded.get("sub")
-            if user_id:
-                user = User.query.get(int(user_id))
-                if user:
-                    return user
-        except Exception as e:
-            logger.warning(f"JWT decode failed: {str(e)}")
-            pass
-    
+
+    # Try JWT from Authorization header OR httpOnly cookie (flask-jwt-extended checks both)
+    try:
+        verify_jwt_in_request(optional=True)
+        user = get_current_user()
+        if user:
+            return user
+    except Exception as e:
+        logger.warning(f"JWT verify failed: {str(e)}")
+        pass
+
     # Fall back to session
     user_id = session.get("user_id")
     if user_id:
