@@ -92,16 +92,10 @@ def login():
     # Generate 6-digit MFA code, valid for 5 minutes
     # The code is stored hashed in DB and marked used after successful verification
     mfa_code = MfaCode.generate_code(user.id, expiry_minutes=5)
-    
-    # Attempt to send MFA code via email (Resend)
-    # If email fails, the code is returned in response for debugging
-    _send_mfa_email(user, mfa_code.code)
 
-    # Always return MFA required to prevent username enumeration
-    return jsonify({
-        "mfaRequired": True,
-        "mfaCode": mfa_code.code  # Only populated when email sending fails
-    }), 200
+    _send_mfa_email(user, mfa_code.plaintext_code)
+
+    return jsonify({"mfaRequired": True}), 200
 
 
 @auth_bp.route("/login/verify-mfa", methods=["POST"])
@@ -142,12 +136,16 @@ def login_verify_mfa():
     # Find the most recent unused MFA code for this user
     # Order by created_at descending to get the latest code first
     mfa_code = MfaCode.query.filter_by(
-        user_id=user.id, 
-        code=data["code"]
-    ).order_by(MfaCode.created_at.desc()).first()
+        user_id=user.id,
+        used=False,
+    ).filter(MfaCode.expires_at > datetime.utcnow()).order_by(MfaCode.created_at.desc()).first()
 
-    # Validate: code exists, not expired, not already used
-    if not mfa_code or not mfa_code.is_valid:
+    if not mfa_code:
+        return jsonify({"error": "Invalid or expired MFA code"}), 401
+
+    import hashlib, secrets
+    incoming_hash = hashlib.sha256(data["code"].encode()).hexdigest()
+    if not secrets.compare_digest(mfa_code.code_hash, incoming_hash):
         return jsonify({"error": "Invalid or expired MFA code"}), 401
 
     # Mark code as used (single-use)
@@ -372,10 +370,9 @@ def forgot_password():
     # Construct the reset link with the token
     # Take first origin from comma-separated FRONTEND_ORIGIN list
     frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173").split(",")[0]
-    reset_link = f"{frontend_origin}/auth/reset-password?token={reset_token.token}"
+reset_link = f"{frontend_origin}/auth/reset-password?token={reset_token.plaintext_token}"
 
-    # Attempt to send reset email (falls back to logging if Resend fails)
-    _send_reset_email(user, reset_token.token)
+    _send_reset_email(user, reset_token.plaintext_token)
 
     # Return success message AND the reset_link for debugging
     # In production, the reset_link would only be sent via email
@@ -422,10 +419,11 @@ def reset_password():
     if len(password) < 6:
         return jsonify({"error": "Password must be at least 6 characters"}), 400
 
-    # Look up the reset token in the database
-    reset_token = PasswordResetToken.query.filter_by(token=token_str).first()
+    # Hash the incoming token before lookup
+    import hashlib
+    token_hash = hashlib.sha256(token_str.encode()).hexdigest()
+    reset_token = PasswordResetToken.query.filter_by(token_hash=token_hash).first()
 
-    # Validate token exists and is valid (not expired, not used)
     if not reset_token or not reset_token.is_valid:
         return jsonify({"error": "Invalid or expired reset token"}), 401
 

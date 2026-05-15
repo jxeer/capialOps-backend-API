@@ -726,73 +726,99 @@ class Message(db.Model):
 class PasswordResetToken(db.Model):
     """
     A single-use password reset token sent to a user's email.
-    
+
     SECURITY CHARACTERISTICS:
     - Tokens are URL-safe base64 strings (43 characters, cryptographically random)
     - Valid for 30 minutes from creation
     - Single-use: marked as used immediately after successful password reset
     - Tied to specific user account (cannot be used for different user)
-    
+    - Stored as SHA-256 hash for security
+
     USAGE:
     1. User requests password reset via /api/v1/auth/forgot-password
-    2. Server generates token and stores in this table
-    3. Server sends email with reset link containing token
+    2. Server generates token and stores hash in this table
+    3. Server sends email with reset link containing plaintext token
     4. User clicks link and submits new password via /api/v1/auth/reset-password
     5. Server validates token (exists, not expired, not used) and updates password
     6. Token is marked as used (cannot be reused)
-    
+
     Attributes:
         id: Primary key
         user_id: Foreign key to users table
-        token: URL-safe base64 token string (stored plain, could be hashed)
+        token_hash: SHA-256 hash of the plaintext token (stored, never plaintext)
         expires_at: When token expires (default 30 minutes from creation)
         used: Whether token has been used (single-use)
         created_at: When token was generated
+
+    Security:
+        - Token stored as SHA-256 hash (one-way, not reversible)
+        - Tokens expire after 30 minutes
+        - Tokens can only be used once
+        - Tokens are tied to specific user accounts
     """
     __tablename__ = "password_reset_tokens"
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    # URL-safe base64 token, 48 bytes of randomness (43 chars after encoding)
-    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
     expires_at = db.Column(db.DateTime, nullable=False)
     used = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relationship to access user from token instance
     user = db.relationship("User", backref="password_reset_tokens")
 
     @classmethod
     def generate_token(cls, user_id, expiry_minutes=30):
         """
         Create and persist a new password reset token for the given user.
-        
+
         This method:
         1. Generates a cryptographically secure 48-byte random token
-        2. Sets expiration time (default 30 minutes)
-        3. Saves to database immediately
-        
+        2. Stores SHA-256 hash of the plaintext token in the database
+        3. Sets expiration time (default 30 minutes)
+        4. Saves to database immediately
+
         Args:
             user_id: The ID of the user requesting the reset
             expiry_minutes: Minutes until token expires (default 30)
-        
+
         Returns:
             PasswordResetToken: The newly created and persisted token instance
+            (plaintext token is returned for use in email link — caller must send it)
         """
-        from app import db
-        # Generate 48 bytes of cryptographically secure randomness, URL-safe base64 encoded
-        token = secrets.token_urlsafe(48)
+        import hashlib
+        import secrets as _secrets
+        token = _secrets.token_urlsafe(48)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
         expires_at = datetime.utcnow() + timedelta(minutes=expiry_minutes)
         reset_token = cls(
             user_id=user_id,
-            token=token,
+            token_hash=token_hash,
             expires_at=expires_at,
         )
         db.session.add(reset_token)
         db.session.commit()
+        reset_token._plaintext_token = token
         return reset_token
 
     @property
+    def plaintext_token(self):
+        """Return the plaintext token (only available immediately after generation)."""
+        return getattr(self, "_plaintext_token", None)
+
+    @property
+    def is_valid(self):
+        """
+        Check if the password reset token is valid.
+
+        A token is valid if:
+        - It has not been marked as used (single-use)
+        - It has not expired (checked against current UTC time)
+
+        Returns:
+            bool: True if valid, False otherwise
+        """
+        return not self.used and datetime.utcnow() < self.expires_at
     def is_valid(self):
         """
         Check if the password reset token is valid.
@@ -824,64 +850,76 @@ class PasswordResetToken(db.Model):
 class MfaCode(db.Model):
     """
     A single-use MFA verification code sent to user's email during login.
-    
+
     When a user successfully enters their username/password, a 6-digit code
     is generated and stored. When they enter the code, it's validated against
     this table and marked as used.
-    
+
     Attributes:
         id: Primary key
         user_id: Foreign key to users table
-        code: 6-digit numeric string (stored plain, could be hashed for extra security)
+        code_hash: SHA-256 hash of the plaintext code (stored, never plaintext)
         expires_at: When the code expires (default 5 minutes from creation)
         used: Whether the code has been used (single-use)
         created_at: When the code was generated
-    
+
     Security:
+        - Codes stored as SHA-256 hash (one-way, not reversible)
         - Codes are 6 digits (100,000 possibilities)
         - Codes expire after 5 minutes
         - Codes can only be used once
         - Codes are tied to specific user accounts
+        - Lookup by (user_id, used, expires_at) index for efficiency
     """
     __tablename__ = "mfa_codes"
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    code = db.Column(db.String(6), nullable=False)  # 6-digit numeric code
+    code_hash = db.Column(db.String(64), nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
     used = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relationship to access user from MfaCode instance
     user = db.relationship("User", backref="mfa_codes")
+
+    __table_args__ = (
+        db.Index("ix_mfa_codes_user_used_expires", "user_id", "used", "expires_at"),
+    )
 
     @classmethod
     def generate_code(cls, user_id, expiry_minutes=5):
         """
         Create and persist a new 6-digit MFA code for the given user.
-        
+
         This method:
         1. Generates a cryptographically secure 6-digit code
-        2. Sets expiration time
-        3. Saves to database immediately
-        
+        2. Stores SHA-256 hash in the database
+        3. Sets expiration time
+        4. Saves to database immediately
+
         Args:
             user_id: The ID of the user to generate code for
             expiry_minutes: Minutes until code expires (default 5)
-        
+
         Returns:
             MfaCode: The newly created and persisted MfaCode instance
+            (plaintext code is attached as _plaintext_code for email — caller must send it)
         """
-        import secrets
-        # Generate 6 random digits for the code
-        code = "".join([str(secrets.randbelow(10)) for _ in range(6)])
-        # Set expiration time
+        import hashlib
+        import secrets as _secrets
+        code = "".join([str(_secrets.randbelow(10)) for _ in range(6)])
+        code_hash = hashlib.sha256(code.encode()).hexdigest()
         expires_at = datetime.utcnow() + timedelta(minutes=expiry_minutes)
-        # Create and persist the code
-        mfa_code = cls(user_id=user_id, code=code, expires_at=expires_at)
+        mfa_code = cls(user_id=user_id, code_hash=code_hash, expires_at=expires_at)
         db.session.add(mfa_code)
         db.session.commit()
+        mfa_code._plaintext_code = code
         return mfa_code
+
+    @property
+    def plaintext_code(self):
+        """Return the plaintext code (only available immediately after generation)."""
+        return getattr(self, "_plaintext_code", None)
 
     @property
     def is_valid(self):
