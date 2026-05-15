@@ -250,6 +250,24 @@ def create_app():
     with app.app_context():
         db.create_all()
 
+        # --- Critical Schema Migrations ---
+        # These columns were added via Alembic migrations but the migration chain has
+        # multiple roots (blocking `flask db upgrade` on Railway). These inline checks
+        # ensure the app can start even if the migration chain is broken.
+        # Only covers columns that prevent the app from starting (code_hash, failed_attempts).
+        # All other schema changes must go through Alembic migrations.
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+
+        if inspector.has_table("mfa_codes"):
+            mfa_cols = {col["name"] for col in inspector.get_columns("mfa_codes")}
+            if "code_hash" not in mfa_cols:
+                db.session.execute(text("ALTER TABLE mfa_codes ADD COLUMN code_hash VARCHAR(64) NOT NULL DEFAULT ''"))
+            if "failed_attempts" not in mfa_cols:
+                db.session.execute(text("ALTER TABLE mfa_codes ADD COLUMN failed_attempts INTEGER DEFAULT 0"))
+
+        db.session.commit()
+
         # Auto-seed demo data if no users exist in the database.
         # This is safe because seed_demo_data() checks if users already exist first.
         # DISABLE_SEED=true can be set to skip seeding.
