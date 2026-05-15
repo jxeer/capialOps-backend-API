@@ -216,11 +216,9 @@ def _send_mfa_email(user, code):
         return {"code": code}
 
     try:
-        # Import resend dynamically to avoid import errors if package not installed
         import resend
         resend.api_key = resend_key
-        
-        # Send email via Resend
+        logging.info(f"[MFA] Attempting to send to {user.email} from onboarding@resend.dev")
         email = resend.Emails.send({
             "from": "CapitalOps <onboarding@resend.dev>",
             "to": [user.email],
@@ -229,9 +227,12 @@ def _send_mfa_email(user, code):
         })
         logging.info(f"[MFA] Code sent to {user.email}, id: {email}")
         return {}
+    except resend.common.ResendApiError as e:
+        logging.error(f"[MFA] Resend API error: {e.status_code} - {e.body}")
+        logging.warning(f"[MFA] Code (fallback) for {user.email}: {code}")
+        return {"code": code}
     except Exception as e:
-        # If email sending fails, log error and return code for debugging
-        logging.error(f"[MFA] Failed to send code to {user.email}: {e}")
+        logging.error(f"[MFA] Unexpected error sending to {user.email}: {type(e).__name__}: {e}")
         logging.warning(f"[MFA] Code (fallback) for {user.email}: {code}")
         return {"code": code}
 
