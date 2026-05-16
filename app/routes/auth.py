@@ -175,7 +175,7 @@ def login_verify_mfa():
         "user": user.to_dict(),
     })
     set_access_cookies(response, access_token)
-    current_app.logger.warning(f"[MFA] set_access_cookies called, Set-Cookie header present: {'Set-Cookie' in [h for h in response.headers]}")
+    current_app.logger.warning(f"[MFA] set_access_cookies called, Set-Cookie headers: {response.headers.getlist('Set-Cookie')}")
     return response, 200
 
 
