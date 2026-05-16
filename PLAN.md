@@ -2,6 +2,18 @@
 
 ## Recent Changes
 
+### Bearer Token Auth (May 16, 2026)
+- **Problem**: Cross-origin requests (Vercel frontend → Railway backend) cannot set cookies on the frontend domain due to browser security restrictions. `Set-Cookie` headers are ignored when the response comes from a different origin than the page.
+- **Solution**: JWT returned as `accessToken` in JSON response, stored in sessionStorage (JavaScript-accessible), sent as `Authorization: Bearer <token>` header on every API request. `credentials: "include"` removed from all fetch calls.
+- **Files changed**:
+  - `frontend/client/src/lib/auth-token.ts` — new module: `setAccessToken()`, `getAccessToken()`, `clearAccessToken()`, `getAuthHeader()`
+  - `frontend/client/src/lib/queryClient.ts` — `apiRequest()` and `getQueryFn()` now use `getAuthHeader()` instead of `credentials: "include"`
+  - `frontend/client/src/hooks/use-auth.tsx` — `logoutMutation` clears token from sessionStorage; user query uses Bearer header
+  - `frontend/client/src/pages/auth-page.tsx` — `handleMfaSubmit` stores `accessToken` from response; removed `credentials: "include"` and debug console.logs
+  - `frontend/client/src/lib/s3.ts` — `uploadToS3()` uses Bearer header
+  - `backend/app/routes/auth.py` — `login_verify_mfa()` no longer calls `set_access_cookies()` (cookie not needed since frontend stores token in sessionStorage)
+- **Result**: Login/MFA flow working on both Chrome and Firefox. `/api/user` returns 200 after authentication.
+
 ### Cleanup (May 2026)
 - `tmp_gui/` directory deleted from API repo (accidental GUI copy committed to backend repo)
 - `__MACOSX/` and `~~/` artifacts removed from GUI repo tracking
@@ -206,9 +218,10 @@ Set these env vars in Railway:
 To re-seed demo data, call this endpoint (requires admin login):
 
 ```javascript
+// Token stored in sessionStorage (Bearer token auth)
 fetch('https://capialops-backend-api-production.up.railway.app/api/v1/dev/seed', {
   method: 'POST',
-  headers: { 'Authorization': 'Bearer ' + localStorage.getItem('auth_token') }
+  headers: { 'Authorization': 'Bearer ' + sessionStorage.getItem('capitalops_access_token') }
 }).then(r => r.json()).then(console.log)
 ```
 
@@ -232,3 +245,6 @@ Credentials: `admin` / `admin123`
 - Admin user missing from Railway DB (restored via dev seed endpoint)
 - JSX structure errors in work-orders.tsx (fixed)
 - Presigned URL generation for S3 uploads
+- **Cross-origin cookie setting blocked**: Vercel → Railway cross-origin requests cannot set cookies on the frontend domain. Fixed with Bearer token auth (JWT stored in sessionStorage, sent as Authorization header).
+- **`/api/user` returning 401 after successful MFA login**: Same root cause as above — cookie not being set. Bearer token approach resolves this.
+- **Logout not working on Firefox**: Same root cause — cookie clearing failed because cookie domain mismatched. Bearer token approach (token cleared from sessionStorage) fixes this.
